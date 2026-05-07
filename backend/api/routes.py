@@ -25,6 +25,23 @@ from backend.core.engine_router import (
 router = APIRouter()
 
 
+def _convert_numpy(obj):
+    if isinstance(obj, dict):
+        return {k: _convert_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_convert_numpy(v) for v in obj]
+    if hasattr(obj, "dtype"):
+        if obj.ndim == 0:
+            return obj.item()
+        return [_convert_numpy(v) for v in obj]
+    if isinstance(obj, float):
+        if obj != obj or obj == float("inf") or obj == float("-inf"):
+            return None
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    return str(obj)
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}
@@ -86,10 +103,7 @@ async def analyze(
         summary_list = out.summary.replace(
             {float("nan"): None, float("inf"): None, float("-inf"): None}
         ).to_dict(orient="records")
-        for row in summary_list:
-            for k, v in row.items():
-                if isinstance(v, float) and (v != v or v == float("inf") or v == float("-inf")):
-                    row[k] = None
+        summary_list = _convert_numpy(summary_list)
 
     figures_b64 = None
     if out.figures:
@@ -104,10 +118,12 @@ async def analyze(
     if out.pdf_bytes:
         pdf_b64 = base64.b64encode(out.pdf_bytes).decode("utf-8")
 
+    comparisons_clean = _convert_numpy(out.comparisons) if out.comparisons else None
+
     return AnalyzeResponse(
         summary=summary_list,
         figures=figures_b64,
         pdf_bytes=pdf_b64,
         log_text=out.log_text,
-        comparisons=out.comparisons,
+        comparisons=comparisons_clean,
     )
