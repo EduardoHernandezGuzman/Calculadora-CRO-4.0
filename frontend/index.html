@@ -53,7 +53,7 @@
             <div class="choice-card" data-value="frecuentista" onclick="selectModel('frecuentista')">
               <div class="choice-title">Modelo Frecuentista</div>
               <div class="choice-text">
-                El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar.
+                El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar, respondiendo preguntas como: &quot;&iquest;la diferencia entre A y B es estad&iacute;sticamente significativa?&quot; o &quot;&iquest;podemos rechazar la hip&oacute;tesis nula?&quot;.
                 <ul>
                   <li>Debes calcular previamente la muestra y esperar hasta alcanzarla.</li>
                   <li>An&aacute;lisis de resultados basado en p-value.</li>
@@ -76,8 +76,14 @@
           <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
             &iquest;Puedes analizar tu test A/B con &quot;Session ID&quot; de cada sesi&oacute;n que ha formado parte del experimento?
           </div>
-          <div style="font-size:0.85rem;color:var(--text-secondary);text-align:center;margin-bottom:1rem;">
-            En entornos web, el uso del &quot;Session ID&quot; de Google Analytics 4 (GA4) permite identificar exposiciones y conversiones a nivel de sesi&oacute;n.
+          <div class="result-card">
+            <div class="choice-text">
+              Para analizar correctamente un experimento A/B es necesario definir la unidad de an&aacute;lisis.
+              <br><br>
+              En entornos web, el uso del &quot;Session ID&quot; de Google Analytics 4 (GA4) permite identificar exposiciones y conversiones a nivel de sesi&oacute;n, evitando duplicidades y sesgos en el c&aacute;lculo de resultados. Si dispones de Session ID, deber&aacute;s a&ntilde;adir al CSV una columna con dichos datos.
+              <br><br>
+              &iquest;Es posible analizar este experimento utilizando el Session ID de GA4?
+            </div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="true" onclick="selectSessionId(true)">
@@ -106,8 +112,9 @@
             <div class="choice-title" id="step3-title">¡Perfecto!</div>
             <div class="choice-text" id="step3-subtitle"></div>
           </div>
-          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
-            &iquest;Los usuarios pueden convertir una sola vez o m&aacute;s de una vez la m&eacute;trica a analizar?
+          <div class="result-card">
+            <div class="choice-title">&iquest;Los usuarios pueden convertir una sola vez o m&aacute;s de una vez la m&eacute;trica a analizar?</div>
+            <div class="choice-text">Selecciona el tipo de conversi&oacute;n que mejor describe tu m&eacute;trica objetivo.</div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="0_1" onclick="selectBayesType('0_1')">
@@ -132,8 +139,9 @@
       <!-- STEP 3b: Freq - interval type -->
       <div id="step-3-freq" class="step-block">
         <div class="step-content">
-          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
-            &iquest;Qu&eacute; tipo de intervalo quieres utilizar para interpretar el uplift relativo?
+          <div class="result-card">
+            <div class="choice-title">&iquest;Qu&eacute; tipo de intervalo quieres utilizar para interpretar el uplift relativo?</div>
+            <div class="choice-text">Selecciona el tipo de intervalo de confianza que mejor se adapta a tu hip&oacute;tesis de test.</div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="centrado" onclick="selectFreqInterval('centrado')">

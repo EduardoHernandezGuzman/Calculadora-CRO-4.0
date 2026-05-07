@@ -242,7 +242,7 @@ function handleFile(file) {
     const lines = text.split('\n').filter(l => l.trim());
     const headers = lines[0].split(',').map(h => h.trim());
 
-    let tableHtml = '<div class="section-spacer"></div><div class="success-box">✅ Archivo cargado correctamente!</div>';
+    let tableHtml = '<div class="section-spacer"></div><div class="success-box">✅ \u00a1Archivo cargado correctamente!</div>';
     tableHtml += '<p style="font-weight:600;margin-bottom:0.5rem;">Vista previa de tus datos:</p>';
     tableHtml += '<table class="data-table"><thead><tr>';
     headers.forEach(h => { tableHtml += `<th>${h}</th>`; });
@@ -306,25 +306,45 @@ async function runAnalysis() {
   }
 }
 
+function isBayesEngine() {
+  const k = window.State.selected_engine_key;
+  return k && (k.startsWith('bayes_'));
+}
+
+function isFreqEngine() {
+  const k = window.State.selected_engine_key;
+  return k && (k.startsWith('freq_'));
+}
+
 function displayResults(out) {
   const container = document.getElementById('results-container');
   let html = '<div class="section-spacer"></div><hr><div class="section-spacer"></div>';
   html += '<h2 class="main-header">Resultados</h2>';
 
   const hasSummary = out.summary && out.summary.length > 0;
+  const hasConsole = hasSummary;
   const hasLog = out.log_text;
   const hasFigs = out.figures && out.figures.length > 0;
   const hasPdf = out.pdf_bytes;
 
   const tabs = [];
   if (hasSummary) tabs.push('resumen');
+  if (hasConsole) tabs.push('consola');
   if (hasLog) tabs.push('log');
   if (hasFigs) tabs.push('graficos');
   if (hasPdf) tabs.push('pdf');
 
   if (tabs.length > 0) {
     html += '<div class="tabs" id="result-tabs">';
-    const tabLabels = { resumen: 'Resumen', log: 'Interpretaci\u00f3n' + (window.State.outputs?.log_text?.includes('IA') ? ' IA' : ''), graficos: 'Gr\u00e1ficos', pdf: 'Reporte' };
+    const tabLabels = {
+      resumen: 'Resumen',
+      consola: 'Salida tipo consola',
+      log: out.log_text && (out.log_text.includes('IA') || out.log_text.includes('GPT') || out.log_text.includes('OpenAI'))
+        ? 'Interpretaci\u00f3n IA'
+        : 'Interpretaci\u00f3n / Log',
+      graficos: 'Gr\u00e1ficos',
+      pdf: 'Reporte'
+    };
     tabs.forEach((t, i) => {
       html += `<button class="tab ${i === 0 ? 'active' : ''}" onclick="switchTab('${t}', this)">${tabLabels[t] || t}</button>`;
     });
@@ -334,6 +354,7 @@ function displayResults(out) {
   tabs.forEach((t, i) => {
     html += `<div class="tab-content ${i === 0 ? 'active' : ''}" id="tab-${t}">`;
     if (t === 'resumen') html += renderSummaryTab(out);
+    else if (t === 'consola') html += renderConsoleTab(out);
     else if (t === 'log') html += renderLogTab(out);
     else if (t === 'graficos') html += renderFiguresTab(out);
     else if (t === 'pdf') html += renderPdfTab(out);
@@ -341,6 +362,24 @@ function displayResults(out) {
   });
 
   container.innerHTML = html;
+}
+
+function _pct(v) {
+  if (v === null || v === undefined) return '';
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  if (isNaN(n)) return v;
+  return (n * 100).toFixed(2) + '%';
+}
+
+function _findComparison(comparisons, dia) {
+  if (!comparisons) return null;
+  const target = String(dia);
+  for (const c of comparisons) {
+    if (String(c.dia) === target || String(c.dia) === 'D\u00eda ' + target) {
+      return c;
+    }
+  }
+  return null;
 }
 
 function renderSummaryTab(out) {
@@ -365,32 +404,192 @@ function renderSummaryTab(out) {
   });
   html += '</tbody></table>';
 
-  if (out.comparisons && out.comparisons.length > 0) {
-    html += '<h3 style="margin-top:1.5rem;">Comparaciones</h3>';
-    out.comparisons.forEach(comp => {
-      html += '<div class="code-block">';
-      html += `<b>D&iacute;a ${comp.dia}:</b>\n`;
-      Object.keys(comp).forEach(k => {
-        if (k === 'dia') return;
-        const v = comp[k];
-        if (typeof v === 'object' && v !== null) {
-          html += `${k}:\n`;
-          Object.entries(v).forEach(([kk, vv]) => {
-            if (typeof vv === 'number') vv = (vv * 100).toFixed(2) + '%';
-            html += `  ${kk}: ${vv}\n`;
-          });
-        }
-      });
-      html += '</div>';
-    });
+  return html;
+}
+
+function renderConsoleTab(out) {
+  let html = '<h3>Salida tipo consola</h3>';
+
+  const hasDia = out.summary.some(r => r.dia !== undefined && r.dia !== null);
+  const hasGrupo = out.summary.some(r => r.grupo !== undefined && r.grupo !== null);
+
+  if (hasDia && hasGrupo) {
+    html += renderBayesConsoleBlocks(out);
+  } else {
+    html += renderFreqConsoleBlocks(out);
   }
 
   return html;
 }
 
+function renderBayesConsoleBlocks(out) {
+  const summaries = out.summary;
+  const comparisons = out.comparisons || [];
+
+  const dias = [...new Set(summaries.map(r => r.dia))];
+
+  let blocks = [];
+
+  dias.forEach(dia => {
+    const rows = summaries.filter(r => String(r.dia) === String(dia));
+    rows.sort((a, b) => String(a.grupo).localeCompare(String(b.grupo)));
+
+    let lines = [];
+    lines.push('\uD83D\uDDD3\ufe0f  ' + dia);
+
+    const grupos = [];
+    rows.forEach(r => {
+      const g = String(r.grupo || '');
+      grupos.push(g);
+      const visitas = r.visitas ?? '';
+      const conv = r.conversiones ?? '';
+      const acumV = r.acum_visitas ?? '';
+      const acumC = r.acum_conversiones ?? '';
+      const media = r.media ?? '';
+      const ciLow = r.ci_low ?? '';
+      const ciHigh = r.ci_high ?? '';
+
+      lines.push('Grupo ' + g + ':');
+      lines.push('  \uD83D\uDCCA Acumulado: ' + acumV + ' visitas | ' + acumC + ' conversiones');
+      lines.push('  Visitas d\u00eda: ' + visitas + ' | Conversiones d\u00eda: ' + conv);
+      lines.push('  Media: ' + _pct(media));
+      lines.push('  IC 95%: [' + _pct(ciLow) + ', ' + _pct(ciHigh) + ']');
+    });
+
+    if (grupos.length >= 2) {
+      lines.push('');
+      const g1 = grupos[0];
+      const g2 = grupos[1];
+      const comp = _findComparison(comparisons, dia);
+      if (comp) {
+        [g1 + '_vs_' + g2, g2 + '_vs_' + g1].forEach(key => {
+          const stats = comp[key];
+          if (stats && typeof stats === 'object') {
+            const upliftMedia = parseFloat(stats.uplift_media || 0) * 100;
+            const probMejor = parseFloat(stats.prob_mejor || 0) * 100;
+            const ciCentered = stats.ci_centered;
+            const ciRight = stats.ci_right;
+            const ciLeft = stats.ci_left;
+
+            const fmtCent = ciCentered && ciCentered.length >= 2
+              ? '[' + (ciCentered[0] * 100).toFixed(2) + '%, ' + (ciCentered[1] * 100).toFixed(2) + '%]'
+              : '—';
+            const fmtRight = ciRight && ciRight.length >= 1
+              ? '> ' + (ciRight[0] * 100).toFixed(2) + '%'
+              : '—';
+            const fmtLeft = ciLeft && ciLeft.length >= 1
+              ? '< ' + (ciLeft[0] * 100).toFixed(2) + '%'
+              : '—';
+
+            lines.push('\uD83D\uDCC8 Uplift (relativo ' + key + '):');
+            lines.push('  Media estimada: ' + upliftMedia.toFixed(2) + '%');
+            lines.push('  ---------------------------------------------');
+            lines.push('  1. IC Centrado:   ' + fmtCent + ' (Est\u00e1ndar)');
+            lines.push('  2. IC Suelo:      ' + fmtRight + ' (M\u00ednimo asegurado 95%)');
+            lines.push('  3. IC Techo:      ' + fmtLeft + ' (M\u00e1ximo riesgo 95%)');
+            lines.push('  ---------------------------------------------');
+            lines.push('  Probabilidad de que ' + g1 + ' > ' + g2 + ': ' + probMejor.toFixed(2) + '%');
+          }
+        });
+      }
+    }
+
+    blocks.push(lines.join('\n'));
+  });
+
+  if (blocks.length === 0) {
+    return '<div class="code-block">No hay datos de consola disponibles.</div>';
+  }
+
+  return blocks.map(b => '<div class="code-block">' + b + '</div>').join('');
+}
+
+function renderFreqConsoleBlocks(out) {
+  const r = out.summary[0] || {};
+  const comparisons = out.comparisons || [];
+
+  const intervalType = window.State.freq_interval_type || 'centrado';
+
+  let lines = [];
+  lines.push('==================================================');
+  lines.push('           AN\u00c1LISIS DE PRECISI\u00d3N B vs A');
+  lines.push('==================================================');
+
+  const hasAggregated = r.n_visitas_A !== undefined;
+
+  if (hasAggregated) {
+    lines.push(
+      'Dise\u00f1o A             | Visitas: ' + String(parseInt(r.n_visitas_A) || 0).padStart(8) + ' | Convs: ' + String(parseInt(r.conv_A) || 0).padStart(6)
+    );
+    lines.push(
+      'Dise\u00f1o B             | Visitas: ' + String(parseInt(r.n_visitas_B) || 0).padStart(8) + ' | Convs: ' + String(parseInt(r.conv_B) || 0).padStart(6)
+    );
+  } else {
+    const ga = r.grupo_A_col || 'A';
+    const gb = r.grupo_B_col || 'B';
+    lines.push(
+      ga + ' (A): ' + String(parseInt(r.n_A) || 0) + ' filas | ' + String(parseFloat(r.conv_A) || 0) + ' convs | Media: ' + (parseFloat(r.media_A) || 0).toFixed(4)
+    );
+    lines.push(
+      gb + ' (B): ' + String(parseInt(r.n_B) || 0) + ' filas | ' + String(parseFloat(r.conv_B) || 0) + ' convs | Media: ' + (parseFloat(r.media_B) || 0).toFixed(4)
+    );
+  }
+
+  lines.push('--------------------------------------------------');
+
+  const significancia = parseFloat(r.precision_B_mejor || 0) * 100;
+  lines.push('NIVEL DE SIGNIFICANCIA DE QUE B > A: ' + significancia.toFixed(2) + '%');
+
+  if (intervalType === 'centrado') {
+    const low = r.ci_uplift_center_low;
+    const high = r.ci_uplift_center_high;
+    if (low !== undefined && high !== undefined) {
+      lines.push('IC CENTRADO (UPLIFT): [' + parseFloat(low).toFixed(2) + '%, ' + parseFloat(high).toFixed(2) + '%]');
+    } else {
+      lines.push('IC CENTRADO (UPLIFT): [—]');
+    }
+  } else if (intervalType === 'derecha') {
+    const val = r.ci_right_95_left;
+    if (val !== undefined) {
+      lines.push('COLA DERECHA (IC 95% IZQUIERDA): > ' + parseFloat(val).toFixed(2) + '%');
+    } else {
+      lines.push('COLA DERECHA (IC 95% IZQUIERDA): —');
+    }
+  } else if (intervalType === 'izquierda') {
+    const val = r.ci_left_95_right;
+    if (val !== undefined) {
+      lines.push('COLA IZQUIERDA (IC 95% DERECHA): < ' + parseFloat(val).toFixed(2) + '%');
+    } else {
+      lines.push('COLA IZQUIERDA (IC 95% DERECHA): —');
+    }
+  }
+
+  if (comparisons && comparisons.length > 0) {
+    comparisons.forEach(comp => {
+      lines.push('--------------------------------------------------');
+      Object.keys(comp).forEach(k => {
+        if (k === 'dia') return;
+        const v = comp[k];
+        if (typeof v === 'object' && v !== null) {
+          lines.push(k + ':');
+          Object.entries(v).forEach(([kk, vv]) => {
+            if (typeof vv === 'number') vv = (vv * 100).toFixed(2) + '%';
+            lines.push('  ' + kk + ': ' + vv);
+          });
+        }
+      });
+    });
+  }
+
+  lines.push('==================================================');
+
+  return '<div class="code-block">' + lines.join('\n') + '</div>';
+}
+
 function renderLogTab(out) {
   if (out.log_text) {
-    return `<h3>${window.State.outputs?.log_text?.includes('IA') ? 'Interpretaci\u00f3n IA' : 'Interpretaci\u00f3n / Log'}</h3>
+    const isAi = out.log_text.includes('IA') || out.log_text.includes('GPT') || out.log_text.includes('OpenAI');
+    return `<h3>${isAi ? 'Interpretaci\u00f3n IA' : 'Interpretaci\u00f3n / Log'}</h3>
       <div class="code-block">${out.log_text}</div>`;
   }
   return '';

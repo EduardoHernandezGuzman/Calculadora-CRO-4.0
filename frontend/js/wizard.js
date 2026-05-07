@@ -92,12 +92,16 @@ function renderStep4Summary() {
 
   if (s.enfoque === 'bayesiano') {
     const tv = s.tipo_valores === '0_1' ? 'Conversiones únicas (Beta-Binomial)' : 'Conversiones múltiples (Gamma-Poisson)';
-    const sid = s.session_id ? 'Con Session ID' : 'Sin Session ID';
-    extra = `Tipo de conversiones: <b>${tv}</b><br>Unidad de análisis: <b>${sid}</b>`;
+    extra = s.session_id
+      ? 'El CSV deberá contener SessionID y conversiones por sesión.'
+      : 'El CSV deberá contener datos agregados por día (Conversiones X / Visitas X).';
+    extra += `<br>Tipo de conversiones: <b>${tv}</b>`;
   } else {
-    const intervalMap = { centrado: 'IC Centrado', derecha: 'Cola derecha', izquierda: 'Cola izquierda' };
-    const sid = s.session_id ? 'Con Session ID' : 'Sin Session ID';
-    extra = `Intervalo: <b>${intervalMap[s.freq_interval_type]}</b><br>Unidad de análisis: <b>${sid}</b>`;
+    const intervalMap = { centrado: 'IC Centrado', derecha: 'Cola derecha (IC 95% izquierda)', izquierda: 'Cola izquierda (IC 95% derecha)' };
+    extra = s.session_id
+      ? 'Frecuentista con Session ID: CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
+      : 'Frecuentista sin Session ID: CSV agregado con Visitas/Conversiones A y B.';
+    extra += `<br><br>Intervalo seleccionado: <b>${intervalMap[s.freq_interval_type]}</b>`;
   }
 
   document.getElementById('step4-summary').innerHTML = `
