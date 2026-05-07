@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora A/B</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="logo-header">
+  <img src="https://vml-thecocktail.com/img/logo_vml_thecocktail.png" alt="VML THE COCKTAIL">
+</div>
+
+<div id="app">
+
+  <!-- ============ WIZARD ============ -->
+  <div id="wizard-section">
+    <div class="center-wrap">
+
+      <div class="steps-indicator" id="steps-indicator">
+        <span class="step-dot active" data-step="1"></span>
+        <span class="step-dot" data-step="2"></span>
+        <span class="step-dot" data-step="3"></span>
+        <span class="step-dot" data-step="4"></span>
+      </div>
+
+      <!-- STEP 1: Choose model -->
+      <div id="step-1" class="step-block step-active">
+        <div class="step-content">
+          <div class="result-card">
+            <div class="choice-title">¡Bienvenido a la calculadora de tests A/B!</div>
+            <div class="choice-text">
+              Esta calculadora te ayudar&aacute; a tomar decisiones basadas en datos eligiendo entre el enfoque bayesiano o frecuentista.
+            </div>
+          </div>
+          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
+            Elige el modelo que deseas utilizar para analizar tu test A/B.<br>
+            <small>&iquest;No sabes cu&aacute;l elegir? No te preocupes: te explico cada uno de forma sencilla.</small>
+          </div>
+          <div class="choice-row">
+            <div class="choice-card" data-value="bayesiano" onclick="selectModel('bayesiano')">
+              <div class="choice-title">Modelo Bayesiano</div>
+              <div class="choice-text">
+                El enfoque bayesiano interpreta los resultados en t&eacute;rminos de probabilidad directa. En lugar de preguntarse &quot;&iquest;es este resultado estad&iacute;sticamente significativo?&quot;, responde preguntas como: &quot;&iquest;cu&aacute;l es la probabilidad de que la variante B sea mejor que la A?&quot;
+                <ul>
+                  <li>No necesitas un tama&ntilde;o de muestra fijo.</li>
+                  <li>An&aacute;lisis de resultados basado en probabilidad.</li>
+                  <li>Decisi&oacute;n m&aacute;s r&aacute;pida: puedes parar el test cuando desees.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="choice-card" data-value="frecuentista" onclick="selectModel('frecuentista')">
+              <div class="choice-title">Modelo Frecuentista</div>
+              <div class="choice-text">
+                El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar.
+                <ul>
+                  <li>Debes calcular previamente la muestra y esperar hasta alcanzarla.</li>
+                  <li>An&aacute;lisis de resultados basado en p-value.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Session ID -->
+      <div id="step-2" class="step-block">
+        <div class="step-content">
+          <div class="result-card">
+            <div class="choice-title" id="step2-title">¡Buena elecci&oacute;n!</div>
+            <div class="choice-text" id="step2-subtitle">
+              Has seleccionado analizar tu test A/B con el modelo <b id="step2-enfoque"></b>.
+            </div>
+          </div>
+          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
+            &iquest;Puedes analizar tu test A/B con &quot;Session ID&quot; de cada sesi&oacute;n que ha formado parte del experimento?
+          </div>
+          <div style="font-size:0.85rem;color:var(--text-secondary);text-align:center;margin-bottom:1rem;">
+            En entornos web, el uso del &quot;Session ID&quot; de Google Analytics 4 (GA4) permite identificar exposiciones y conversiones a nivel de sesi&oacute;n.
+          </div>
+          <div class="choice-row">
+            <div class="choice-card" data-value="true" onclick="selectSessionId(true)">
+              <div class="choice-title">Con Session ID</div>
+              <div class="choice-text">
+                Dispondr&aacute;s de mayor precisi&oacute;n en el an&aacute;lisis al identificar exposiciones y conversiones a nivel de sesi&oacute;n, evitando duplicidades. El CSV deber&aacute; incluir una columna con los Session ID de GA4.
+              </div>
+            </div>
+            <div class="choice-card" data-value="false" onclick="selectSessionId(false)">
+              <div class="choice-title">Sin Session ID</div>
+              <div class="choice-text">
+                El an&aacute;lisis se realizar&aacute; utilizando eventos y sesiones agregados. El CSV deber&aacute; contener datos de visitas y conversiones agregados por d&iacute;a para cada variante.
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-back" onclick="goToStep(1)">&larr; Volver</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3a: Bayes - conversion type -->
+      <div id="step-3-bayes" class="step-block">
+        <div class="step-content">
+          <div class="result-card">
+            <div class="choice-title" id="step3-title">¡Perfecto!</div>
+            <div class="choice-text" id="step3-subtitle"></div>
+          </div>
+          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
+            &iquest;Los usuarios pueden convertir una sola vez o m&aacute;s de una vez la m&eacute;trica a analizar?
+          </div>
+          <div class="choice-row">
+            <div class="choice-card" data-value="0_1" onclick="selectBayesType('0_1')">
+              <div class="choice-title">Conversiones &uacute;nicas [0,1]</div>
+              <div class="choice-text">
+                El usuario puede convertir una sola vez. Se analiza mediante la distribuci&oacute;n previa Beta, ideal para conversiones donde 0 = no convierte y 1 = convierte en la sesi&oacute;n.
+              </div>
+            </div>
+            <div class="choice-card" data-value="0_inf" onclick="selectBayesType('0_inf')">
+              <div class="choice-title">Conversiones m&uacute;ltiples [0,&infin;]</div>
+              <div class="choice-text">
+                Se analiza mediante la distribuci&oacute;n previa Gamma-Poisson, adecuada para conteos de m&eacute;tricas donde un usuario puede convertir m&aacute;s de una vez.
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-back" onclick="goToStep(2)">&larr; Volver</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3b: Freq - interval type -->
+      <div id="step-3-freq" class="step-block">
+        <div class="step-content">
+          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
+            &iquest;Qu&eacute; tipo de intervalo quieres utilizar para interpretar el uplift relativo?
+          </div>
+          <div class="choice-row">
+            <div class="choice-card" data-value="centrado" onclick="selectFreqInterval('centrado')">
+              <div class="choice-title">IC Centrado</div>
+              <div class="choice-text">
+                Muestra el intervalo de confianza centrado del uplift relativo. Opci&oacute;n est&aacute;ndar y m&aacute;s habitual para tests bidireccionales.
+              </div>
+            </div>
+            <div class="choice-card" data-value="derecha" onclick="selectFreqInterval('derecha')">
+              <div class="choice-title">Cola derecha</div>
+              <div class="choice-text">
+                Utiliza el IC 95% izquierda. Indica el m&iacute;nimo uplift que podemos esperar con un 95% de confianza.
+              </div>
+            </div>
+            <div class="choice-card" data-value="izquierda" onclick="selectFreqInterval('izquierda')">
+              <div class="choice-title">Cola izquierda</div>
+              <div class="choice-text">
+                Utiliza el IC 95% derecha. Indica el m&aacute;ximo riesgo de p&eacute;rdida con un 95% de confianza.
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-back" onclick="goToStep(2)">&larr; Volver</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4: Summary -->
+      <div id="step-4" class="step-block">
+        <div class="step-content">
+          <div id="step4-summary"></div>
+          <div id="step4-not-ready">
+            <div class="warning-box">
+              <b>Todav&iacute;a no disponible</b><br><br>
+              Selecciona un enfoque y completa los pasos.
+            </div>
+            <div class="btn-row" style="justify-content:center;">
+              <button class="btn btn-primary" onclick="goToStep(1)">Volver al inicio</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row" id="step4-back-row" style="display:none;">
+        <button class="btn-back" onclick="goToStep(3)">&larr; Volver al paso anterior</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ CALCULATOR ============ -->
+  <div id="calculator-section" style="display:none;">
+    <div class="calculator-layout">
+      <div class="calculator-sidebar" id="calculator-sidebar"></div>
+      <div class="calculator-main" id="calculator-main"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Loading spinner -->
+<div class="spinner-overlay" id="spinner">
+  <div style="text-align:center;">
+    <div class="spinner"></div>
+    <div class="spinner-text">Ejecutando motor...</div>
+  </div>
+</div>
+
+<!-- CSV Format Modal -->
+<div class="modal-overlay" id="csv-modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeCsvModal()">&times;</button>
+    <h3 style="margin-bottom:1rem;">&iquest;C&oacute;mo debe ser el formato del CSV?</h3>
+    <p style="margin-bottom:1rem;color:var(--text-secondary);">
+      El archivo CSV debe contener los datos del experimento agregados por d&iacute;a. Incluye las siguientes columnas: d&iacute;a, visitas A, visitas B, conversiones A y conversiones B. La columna d&iacute;a debe usar valores num&eacute;ricos consecutivos (1, 2, 3...), representando el orden de los d&iacute;as del experimento (no fechas reales).
+    </p>
+    <table class="data-table">
+      <thead>
+        <tr><th>D&iacute;a</th><th>Visitas A</th><th>Visitas B</th><th>Conversiones A</th><th>Conversiones B</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>100</td><td>95</td><td>5</td><td>8</td></tr>
+        <tr><td>2</td><td>110</td><td>105</td><td>6</td><td>7</td></tr>
+        <tr><td>3</td><td>98</td><td>102</td><td>4</td><td>9</td></tr>
+        <tr><td>4</td><td>105</td><td>100</td><td>7</td><td>6</td></tr>
+        <tr><td>5</td><td>112</td><td>108</td><td>5</td><td>10</td></tr>
+        <tr><td>6</td><td>95</td><td>98</td><td>6</td><td>7</td></tr>
+        <tr><td>7</td><td>108</td><td>106</td><td>8</td><td>9</td></tr>
+        <tr><td>8</td><td>102</td><td>104</td><td>4</td><td>8</td></tr>
+        <tr><td>9</td><td>115</td><td>110</td><td>7</td><td>11</td></tr>
+        <tr><td>10</td><td>100</td><td>103</td><td>5</td><td>10</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/wizard.js"></script>
+<script src="js/calculator.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
