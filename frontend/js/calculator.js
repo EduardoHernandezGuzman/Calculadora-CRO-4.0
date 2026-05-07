@@ -127,8 +127,8 @@ function renderFreqConfig() {
   let dirHtml = '';
   if (dirTxt) {
     const dirDesc = s.freq_interval_type === 'derecha'
-      ? 'Se eval&uacute;a si el valor de la m&eacute;trica en la variante es mayor que en el control.'
-      : 'Se eval&uacute;a si el valor de la m&eacute;trica en la variante es menor que en el control.';
+      ? 'Se eval\u00faa si el valor de la m\u00e9trica en la variante es mayor que en el control, seg\u00fan el criterio definido para el experimento.'
+      : 'Se eval\u00faa si el valor de la m\u00e9trica en la variante es menor que en el control, seg\u00fan el criterio definido para el experimento.';
     dirHtml = `
       <div class="expander">
         <div class="expander-header">Direcci&oacute;n de hip&oacute;tesis <span class="arrow">&#9660;</span></div>
@@ -146,8 +146,8 @@ function renderFreqConfig() {
       <div class="expander-body">
         <div class="dd-value">${tipo}</div>
         ${tipo === 'Two-Tailed'
-          ? 'Se analiza cualquier diferencia, tanto mejora como empeoramiento.'
-          : 'Se analiza &uacute;nicamente una diferencia en una direcci&oacute;n espec&iacute;fica.'}
+          ? 'Se analiza cualquier diferencia, tanto mejora como empeoramiento. Este enfoque eval\u00faa si existe un efecto estad\u00edsticamente significativo sin asumir de antemano el sentido del cambio.'
+          : 'Se analiza \u00fanicamente una diferencia en una direcci\u00f3n espec\u00edfica, ya sea mejorar o empeorar la m\u00e9trica objetivo. En caso de seleccionar One-Tailed, en el siguiente paso se indicar\u00e1 si el an\u00e1lisis debe detectar una mejora o un empeoramiento de la m\u00e9trica.'}
       </div>
     </div>
     ${dirHtml}

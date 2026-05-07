@@ -34,9 +34,9 @@
               Esta calculadora te ayudar&aacute; a tomar decisiones basadas en datos eligiendo entre el enfoque bayesiano o frecuentista.
             </div>
           </div>
-          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
-            Elige el modelo que deseas utilizar para analizar tu test A/B.<br>
-            <small>&iquest;No sabes cu&aacute;l elegir? No te preocupes: te explico cada uno de forma sencilla.</small>
+          <div class="result-card">
+            <div class="choice-title">Elige el modelo que deseas utilizar para analizar tu test A/B</div>
+            <div class="choice-text">&iquest;No sabes cu&aacute;l elegir? No te preocupes: te explico cada uno de forma sencilla.</div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="bayesiano" onclick="selectModel('bayesiano')">
@@ -87,20 +87,20 @@
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="true" onclick="selectSessionId(true)">
-              <div class="choice-title">Con Session ID</div>
+              <div class="choice-title">&#9989; Con Session ID</div>
               <div class="choice-text">
                 Dispondr&aacute;s de mayor precisi&oacute;n en el an&aacute;lisis al identificar exposiciones y conversiones a nivel de sesi&oacute;n, evitando duplicidades. El CSV deber&aacute; incluir una columna con los Session ID de GA4.
               </div>
             </div>
             <div class="choice-card" data-value="false" onclick="selectSessionId(false)">
-              <div class="choice-title">Sin Session ID</div>
+              <div class="choice-title">&#10060; Sin Session ID</div>
               <div class="choice-text">
                 El an&aacute;lisis se realizar&aacute; utilizando eventos y sesiones agregados. El CSV deber&aacute; contener datos de visitas y conversiones agregados por d&iacute;a para cada variante.
               </div>
             </div>
           </div>
           <div class="btn-row">
-            <button class="btn-back" onclick="goToStep(1)">&larr; Volver</button>
+            <button class="btn-back" onclick="goToStep(1)">&#11013;&#65039; Volver</button>
           </div>
         </div>
       </div>
@@ -111,6 +111,7 @@
           <div class="result-card">
             <div class="choice-title" id="step3-title">¡Perfecto!</div>
             <div class="choice-text" id="step3-subtitle"></div>
+            <div class="choice-text" id="step3-subtitle-extra" style="margin-top:0.5rem;"></div>
           </div>
           <div class="result-card">
             <div class="choice-title">&iquest;Los usuarios pueden convertir una sola vez o m&aacute;s de una vez la m&eacute;trica a analizar?</div>
@@ -118,20 +119,20 @@
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="0_1" onclick="selectBayesType('0_1')">
-              <div class="choice-title">Conversiones &uacute;nicas [0,1]</div>
+              <div class="choice-title">Conversiones &uacute;nicas</div>
               <div class="choice-text">
-                El usuario puede convertir una sola vez. Se analiza mediante la distribuci&oacute;n previa Beta, ideal para conversiones donde 0 = no convierte y 1 = convierte en la sesi&oacute;n.
+                El usuario puede convertir una sola vez. Se analiza mediante la distribuci&oacute;n previa <b>Beta</b>, ideal para conversiones donde 0 = no convierte y 1 = convierte en la sesi&oacute;n.
               </div>
             </div>
             <div class="choice-card" data-value="0_inf" onclick="selectBayesType('0_inf')">
-              <div class="choice-title">Conversiones m&uacute;ltiples [0,&infin;]</div>
+              <div class="choice-title">Conversiones m&uacute;ltiples</div>
               <div class="choice-text">
-                Se analiza mediante la distribuci&oacute;n previa Gamma-Poisson, adecuada para conteos de m&eacute;tricas donde un usuario puede convertir m&aacute;s de una vez.
+                Se analiza mediante la distribuci&oacute;n previa <b>Gamma-Poisson</b>, adecuada para conteos de m&eacute;tricas donde un usuario puede convertir m&aacute;s de una vez.
               </div>
             </div>
           </div>
           <div class="btn-row">
-            <button class="btn-back" onclick="goToStep(2)">&larr; Volver</button>
+            <button class="btn-back" onclick="goToStep(2)">&#11013;&#65039; Volver</button>
           </div>
         </div>
       </div>
@@ -164,7 +165,7 @@
             </div>
           </div>
           <div class="btn-row">
-            <button class="btn-back" onclick="goToStep(2)">&larr; Volver</button>
+            <button class="btn-back" onclick="goToStep(2)">&#11013;&#65039; Volver</button>
           </div>
         </div>
       </div>
@@ -186,7 +187,7 @@
       </div>
 
       <div class="btn-row" id="step4-back-row" style="display:none;">
-        <button class="btn-back" onclick="goToStep(3)">&larr; Volver al paso anterior</button>
+        <button class="btn-back" onclick="goToStep(3)">&#11013;&#65039; Volver al paso anterior</button>
       </div>
 
     </div>
@@ -216,7 +217,7 @@
     <button class="modal-close" onclick="closeCsvModal()">&times;</button>
     <h3 style="margin-bottom:1rem;">&iquest;C&oacute;mo debe ser el formato del CSV?</h3>
     <p style="margin-bottom:1rem;color:var(--text-secondary);">
-      El archivo CSV debe contener los datos del experimento agregados por d&iacute;a. Incluye las siguientes columnas: d&iacute;a, visitas A, visitas B, conversiones A y conversiones B. La columna d&iacute;a debe usar valores num&eacute;ricos consecutivos (1, 2, 3...), representando el orden de los d&iacute;as del experimento (no fechas reales).
+      El archivo CSV debe contener los datos del experimento agregados por d&iacute;a. Incluye las siguientes columnas: <strong>d&iacute;a, visitas A, visitas B, conversiones A</strong> y <strong>conversiones B</strong>. La columna <strong>d&iacute;a</strong> debe usar valores num&eacute;ricos consecutivos (1, 2, 3&hellip;), representando el orden de los d&iacute;as del experimento (no fechas reales).
     </p>
     <table class="data-table">
       <thead>

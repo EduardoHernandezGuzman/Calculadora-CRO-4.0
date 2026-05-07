@@ -72,15 +72,22 @@ function goToStep(step) {
 }
 
 function showWizardStep3Bayes() {
-  const sidTxt = window.State.session_id ? 'con Session ID' : 'sin Session ID';
+  const sid = window.State.session_id;
+  const sidTxt = sid ? 'con Session ID' : 'sin Session ID';
+  const extra = sid
+    ? 'De esta manera, el CSV de tu test A/B deber\u00e1 contener una columna con los Session ID.'
+    : 'El an\u00e1lisis se realizar\u00e1 utilizando eventos y sesiones agregados.';
   document.getElementById('step3-subtitle').innerHTML =
-    `Analizar&aacute;s tu test A/B ${sidTxt}...`;
+    `Analizar\u00e1s tu test A/B ${sidTxt}.`;
+  document.getElementById('step3-subtitle-extra').textContent = extra;
 }
 
 function showWizardStep3Freq() {
-  const sidTxt = window.State.session_id ? 'con Session ID' : 'sin Session ID';
+  const sid = window.State.session_id;
+  const sidTxt = sid ? 'con Session ID' : 'sin Session ID';
   document.getElementById('step3-subtitle').innerHTML =
-    `Analizar&aacute;s tu test A/B ${sidTxt}...`;
+    `Analizar\u00e1s tu test A/B ${sidTxt}.`;
+  document.getElementById('step3-subtitle-extra').textContent = '';
 }
 
 function renderStep4Summary() {
@@ -97,7 +104,7 @@ function renderStep4Summary() {
       : 'El CSV deberá contener datos agregados por día (Conversiones X / Visitas X).';
     extra += `<br>Tipo de conversiones: <b>${tv}</b>`;
   } else {
-    const intervalMap = { centrado: 'IC Centrado', derecha: 'Cola derecha (IC 95% izquierda)', izquierda: 'Cola izquierda (IC 95% derecha)' };
+    const intervalMap = { centrado: 'IC centrado', derecha: 'Cola derecha (IC 95% izquierda)', izquierda: 'Cola izquierda (IC 95% derecha)' };
     extra = s.session_id
       ? 'Frecuentista con Session ID: CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
       : 'Frecuentista sin Session ID: CSV agregado con Visitas/Conversiones A y B.';
