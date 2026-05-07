@@ -39,7 +39,7 @@ def get_engine_label(engine_key: Optional[str]) -> str:
 
 def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> EngineOutput:
     if engine_key == ENGINE_0_1_NO_SID:
-        from pablo_code import varios_disenos_0_1 as mod
+        from backend.engines import varios_disenos_0_1 as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),
@@ -50,7 +50,7 @@ def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> Eng
         )
 
     if engine_key == ENGINE_0_INF_NO_SID:
-        from pablo_code import varios_disenos_0_inf as mod
+        from backend.engines import varios_disenos_0_inf as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),
@@ -61,7 +61,7 @@ def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> Eng
         )
 
     if engine_key == ENGINE_0_1_SID:
-        from pablo_code import varios_disenos_sessionid_0_1 as mod
+        from backend.engines import varios_disenos_sessionid_0_1 as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),
@@ -72,7 +72,7 @@ def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> Eng
         )
 
     if engine_key == ENGINE_0_INF_SID:
-        from pablo_code import varios_disenos_sessionid_0_inf as mod
+        from backend.engines import varios_disenos_sessionid_0_inf as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),
@@ -83,7 +83,7 @@ def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> Eng
         )
 
     if engine_key == ENGINE_FREQ_NO_SID:
-        from pablo_code import varios_diseno_frecuentista as mod
+        from backend.engines import varios_diseno_frecuentista as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),
@@ -94,7 +94,7 @@ def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> Eng
         )
 
     if engine_key == ENGINE_FREQ_SID:
-        from pablo_code import varios_disenos_frecuentista_sessionid as mod
+        from backend.engines import varios_disenos_frecuentista_sessionid as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),
