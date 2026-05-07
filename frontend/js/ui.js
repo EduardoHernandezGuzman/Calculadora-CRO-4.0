@@ -56,9 +56,16 @@ function updateStepsIndicator(step) {
 
 function showStep(step) {
   $$('.step-block').forEach(el => el.classList.remove('step-active'));
-  const target = document.getElementById(`step-${step}`);
+  let target;
+  if (step === 3) {
+    const suffix = (window.State.enfoque === 'bayesiano') ? 'bayes' : 'freq';
+    target = document.getElementById(`step-3-${suffix}`);
+  } else {
+    target = document.getElementById(`step-${step}`);
+  }
   if (target) target.classList.add('step-active');
-  document.getElementById('step-4-back-row').style.display = step === 4 ? '' : 'none';
+  const backRow = document.getElementById('step4-back-row');
+  if (backRow) backRow.style.display = step === 4 ? '' : 'none';
   updateStepsIndicator(step);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
