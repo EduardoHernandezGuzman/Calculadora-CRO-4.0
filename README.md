@@ -30,7 +30,7 @@ Cada motor devuelve una estructura homogénea: `summary`, `figures`, `pdf_bytes`
 ## Funcionalidades
 
 - Wizard guiado paso a paso para configurar el análisis
-- Interpretación con IA vía OpenAI (opcional)
+- Interpretación con IA vía OpenAI (opcional) — la API key se puede introducir directamente en la interfaz o mediante variable de entorno
 - Exportación a PDF (opcional)
 - Diseño responsive con identidad visual de VML THE COCKTAIL
 - Sin dependencias de frameworks JS — HTML, CSS y JS vanilla
