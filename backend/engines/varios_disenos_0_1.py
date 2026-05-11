@@ -32,15 +32,12 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def _get_openai_api_key() -> str:
-    try:
-        return st.secrets["OPENAI_API_KEY"]
-    except Exception:
-        return os.getenv("OPENAI_API_KEY", "").strip()
-
-
-def interpretar_con_ia(resultados: Dict[str, Any]) -> str:
-    api_key = _get_openai_api_key()
+def interpretar_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+    if not api_key:
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        except Exception:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         return "Interpretación IA no configurada (falta OPENAI_API_KEY en secrets o entorno)."
 
@@ -391,6 +388,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     num_samples = int(config.get("num_samples", 100000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
+    openai_api_key = config.get("openai_api_key", "")
 
     expected_priors = config.get("expected_priors")
     if not isinstance(expected_priors, dict) or not expected_priors:
@@ -423,7 +421,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     ai_text: Optional[str] = None
     if include_ai and modelo.historial:
         try:
-            ai_text = interpretar_con_ia(modelo.historial[-1])
+            ai_text = interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key)
         except Exception as e:
             ai_text = f"No se pudo generar interpretación IA: {e}"
 

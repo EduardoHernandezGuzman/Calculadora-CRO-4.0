@@ -44,6 +44,8 @@ function renderSidebar() {
       el.classList.toggle('open');
     });
   });
+
+  toggleAiKeyInput();
 }
 
 function renderModelExpander(enfoque) {
@@ -70,8 +72,12 @@ function renderExecutionOptions(enfoque) {
         <input type="checkbox" id="chk-pdf"> Generar PDF
       </label>
       <label class="checkbox-item">
-        <input type="checkbox" id="chk-ai" checked> Interpretaci&oacute;n IA (OpenAI)
+        <input type="checkbox" id="chk-ai" checked onchange="toggleAiKeyInput()"> Interpretaci&oacute;n IA (OpenAI)
       </label>
+    </div>
+    <div id="ai-key-row" class="ai-key-row">
+      <label class="input-label">OpenAI API Key</label>
+      <input type="password" id="input-ai-key" class="form-input" placeholder="sk-..." autocomplete="off">
     </div>
   `;
 }
@@ -266,6 +272,14 @@ function handleFile(file) {
   reader.readAsText(file);
 }
 
+function toggleAiKeyInput() {
+  const chkAi = document.getElementById('chk-ai');
+  const row = document.getElementById('ai-key-row');
+  if (row) {
+    row.style.display = chkAi && chkAi.checked ? 'flex' : 'none';
+  }
+}
+
 async function runAnalysis() {
   if (!uploadedCsvFile) {
     showError('No hay archivo CSV cargado.');
@@ -280,10 +294,12 @@ async function runAnalysis() {
 
   const generatePdf = document.getElementById('chk-pdf') ? document.getElementById('chk-pdf').checked : false;
   const includeAi = document.getElementById('chk-ai') ? document.getElementById('chk-ai').checked : false;
+  const openaiApiKey = document.getElementById('input-ai-key') ? document.getElementById('input-ai-key').value.trim() : '';
 
   const config = {
     generate_pdf: generatePdf,
     include_ai: includeAi,
+    openai_api_key: openaiApiKey,
   };
 
   if (window.State.enfoque === 'bayesiano') {

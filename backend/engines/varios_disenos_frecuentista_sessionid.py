@@ -30,14 +30,15 @@ warnings.filterwarnings("ignore")
 sns.set(style="whitegrid")
 
 
-def _safe_openai_client() -> Optional["OpenAI"]:
+def _safe_openai_client(api_key: Optional[str] = None) -> Optional["OpenAI"]:
     if OpenAI is None:
         return None
 
-    try:
-        api_key = st.secrets["OPENAI_API_KEY"]
-    except Exception:
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        except Exception:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
     if not api_key:
         return None
@@ -48,8 +49,8 @@ def _safe_openai_client() -> Optional["OpenAI"]:
         return None
 
 
-def interpretar_resultados_con_ia(resultados: Dict[str, Any]) -> str:
-    client = _safe_openai_client()
+def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+    client = _safe_openai_client(api_key=api_key)
     if client is None:
         return ""
 
@@ -274,9 +275,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     n_iteraciones = int(config.get("n_iteraciones", 10000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
-
-    if df.shape[1] < 2:
-        raise ValueError("El CSV debe tener al menos 2 columnas (grupo A y grupo B).")
+    openai_api_key = config.get("openai_api_key", "")
 
     cols = list(df.columns[:2])
     datos = {c: df[c].dropna().values for c in cols}
@@ -292,7 +291,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         with PdfPages(buffer) as pdf:
             figs = analisis.generar_reporte(pdf)
             if include_ai:
-                texto_ia = interpretar_resultados_con_ia(analisis.resultados)
+                texto_ia = interpretar_resultados_con_ia(analisis.resultados, api_key=openai_api_key)
                 if texto_ia:
                     fig_ia = plt.figure(figsize=(8.27, 11.69))
                     fig_ia.clf()
@@ -334,7 +333,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
 
     log_text = ""
     if include_ai:
-        log_text = interpretar_resultados_con_ia(analisis.resultados)
+        log_text = interpretar_resultados_con_ia(analisis.resultados, api_key=openai_api_key)
 
     return {
         "summary": summary,

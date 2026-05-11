@@ -18,11 +18,12 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def interpretar_con_ia(resultados: Dict[str, Any]) -> str:
-    try:
-        api_key = st.secrets["OPENAI_API_KEY"]
-    except Exception:
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+def interpretar_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+    if not api_key:
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        except Exception:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
     if not api_key:
         return "Interpretación IA no configurada (falta OPENAI_API_KEY en secrets o entorno)."
@@ -185,6 +186,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None):
     num_samples = int(config.get("num_samples", 20000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
+    openai_api_key = config.get("openai_api_key", "")
 
     priors = {"A": (1, 1), "B": (1, 1)}
     modelo = ConversionBayesGamma(priors=priors)
@@ -265,7 +267,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None):
         pdf_bytes = buffer.read()
 
     if include_ai and modelo.historial:
-        log_text = interpretar_con_ia(modelo.historial[-1])
+        log_text = interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key)
 
     return {
         "summary": summary_df,

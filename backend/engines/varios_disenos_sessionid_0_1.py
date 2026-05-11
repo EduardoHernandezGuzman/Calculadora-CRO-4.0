@@ -27,11 +27,12 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def _interpretar_con_ia(resultados_ultimo_dia: Dict[str, Any]) -> str:
-    try:
-        api_key = st.secrets["OPENAI_API_KEY"]
-    except Exception:
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+def _interpretar_con_ia(resultados_ultimo_dia: Dict[str, Any], api_key: Optional[str] = None) -> str:
+    if not api_key:
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        except Exception:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
     if not api_key:
         return "Interpretación IA no configurada (falta OPENAI_API_KEY en secrets o entorno)."
@@ -315,6 +316,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     num_samples = int(config.get("num_samples", 20000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
+    openai_api_key = config.get("openai_api_key", "")
     expected_priors = config.get("expected_priors")
 
     grupos = _infer_grupos_from_columns(df)
@@ -394,7 +396,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     if include_ai:
         if modelo.historial:
             log_parts.append("🤖 Interpretación IA (último día):")
-            log_parts.append(_interpretar_con_ia(modelo.historial[-1]))
+            log_parts.append(_interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key))
         else:
             log_parts.append("[IA] No hay historial para interpretar.")
 

@@ -31,18 +31,15 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def _get_openai_api_key() -> str:
-    try:
-        return st.secrets["OPENAI_API_KEY"]
-    except Exception:
-        return os.getenv("OPENAI_API_KEY", "").strip()
-
-
-def interpretar_resultados_con_ia(resultados: Dict[str, Any]) -> str:
+def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
     if OpenAI is None:
         return "❌ La librería 'openai' no está instalada en este entorno."
 
-    api_key = _get_openai_api_key()
+    if not api_key:
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        except Exception:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         return "❌ OPENAI_API_KEY no está configurada en secrets o entorno."
 
@@ -291,6 +288,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     n_iteraciones = int(config.get("n_iteraciones", 10000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
+    openai_api_key = config.get("openai_api_key", "")
 
     required = ["Visitas A", "Visitas B", "Conversiones A", "Conversiones B"]
     missing = [c for c in required if c not in df.columns]
@@ -322,7 +320,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
 
     log_text = ""
     if include_ai:
-        log_text = interpretar_resultados_con_ia(analisis.resultados)
+        log_text = interpretar_resultados_con_ia(analisis.resultados, api_key=openai_api_key)
 
     r = analisis.resultados
     uplift_pct = (
