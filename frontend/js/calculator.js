@@ -176,31 +176,97 @@ function renderFreqConfig() {
 
 function renderCalculatorMain() {
   const main = document.getElementById('calculator-main');
+  const freq = isFreqEngine();
+
+  const csvPanel = `
+    <div id="method-csv">
+      <p class="sub-header">Cargar datos desde CSV</p>
+      <div class="hint-row">
+        <span style="font-size:18px;">💡</span>
+        <span>Sube un CSV con el formato requerido.</span>
+        <button class="btn-link" onclick="openCsvModal()">Ver ejemplo de formato</button>
+      </div>
+      <div class="subsection-spacer"></div>
+      <div class="file-upload-zone" id="upload-zone">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">Arrastra y suelta tu archivo aqu&iacute;</div>
+        <div class="upload-hint">L&iacute;mite 200 MB por archivo &bull; CSV</div>
+        <button class="upload-btn" onclick="document.getElementById('csv-file-input').click()">Adjuntar</button>
+        <input type="file" id="csv-file-input" accept=".csv">
+      </div>
+      <div id="csv-preview"></div>
+    </div>
+  `;
+
   main.innerHTML = `
     <h2 class="main-header">Calculadora para Tests A/B</h2>
     <div class="info-box">
       Esta herramienta te permite analizar los resultados de tus tests A/B usando modelos estad&iacute;sticos bayesianos o frecuentistas. Adem&aacute;s, te ayudaremos a la interpretaci&oacute;n de los resultados mediante Inteligencia Artificial. Sube un archivo CSV con el formato indicado y analiza tu test A/B.
     </div>
     <div class="section-spacer"></div>
-    <p class="sub-header">Cargar datos desde CSV</p>
-    <div class="hint-row">
-      <span style="font-size:18px;">💡</span>
-      <span>Sube un CSV con el formato requerido.</span>
-      <button class="btn-link" onclick="openCsvModal()">Ver ejemplo de formato</button>
-    </div>
-    <div class="subsection-spacer"></div>
-    <div class="file-upload-zone" id="upload-zone">
-      <div class="upload-icon">📂</div>
-      <div class="upload-text">Arrastra y suelta tu archivo aqu&iacute;</div>
-      <div class="upload-hint">L&iacute;mite 200 MB por archivo &bull; CSV</div>
-      <button class="upload-btn" onclick="document.getElementById('csv-file-input').click()">Adjuntar</button>
-      <input type="file" id="csv-file-input" accept=".csv">
-    </div>
-    <div id="csv-preview"></div>
+    ${freq ? renderInputMethodTabs() : ''}
+    ${csvPanel}
+    ${freq ? renderManualEntryPanel() : ''}
     <div id="results-container"></div>
   `;
 
   setupFileUpload();
+}
+
+function renderInputMethodTabs() {
+  return `
+    <div class="tabs" id="input-method-tabs">
+      <button class="tab active" id="tab-method-csv" onclick="selectInputMethod('csv')">Cargar CSV</button>
+      <button class="tab" id="tab-method-manual" onclick="selectInputMethod('manual')">Introducir datos manualmente</button>
+    </div>
+  `;
+}
+
+function renderManualEntryPanel() {
+  return `
+    <div id="method-manual" style="display:none;">
+      <p class="sub-header">Introducir datos manualmente</p>
+      <div class="hint-row">
+        <span style="font-size:18px;">✍️</span>
+        <span>Introduce los totales agregados de tu test A/B (usuarios o sesiones y conversiones de cada variante).</span>
+      </div>
+      <div class="subsection-spacer"></div>
+      <div class="manual-entry-grid">
+        <div class="manual-entry-group">
+          <div class="manual-entry-title">Variante A (Control)</div>
+          <label class="input-label" for="manual-a-visitas">Usuarios / sesiones</label>
+          <input type="number" min="0" step="1" id="manual-a-visitas" class="form-input" placeholder="Ej. 2823">
+          <label class="input-label" for="manual-a-conv">Conversiones</label>
+          <input type="number" min="0" step="1" id="manual-a-conv" class="form-input" placeholder="Ej. 589">
+        </div>
+        <div class="manual-entry-group">
+          <div class="manual-entry-title">Variante B</div>
+          <label class="input-label" for="manual-b-visitas">Usuarios / sesiones</label>
+          <input type="number" min="0" step="1" id="manual-b-visitas" class="form-input" placeholder="Ej. 2694">
+          <label class="input-label" for="manual-b-conv">Conversiones</label>
+          <input type="number" min="0" step="1" id="manual-b-conv" class="form-input" placeholder="Ej. 541">
+        </div>
+      </div>
+      <div class="btn-row" style="justify-content:center;">
+        <button class="btn btn-primary" onclick="runManualAnalysis()">Analizar experimento</button>
+      </div>
+    </div>
+  `;
+}
+
+function selectInputMethod(method) {
+  const csv = document.getElementById('method-csv');
+  const manual = document.getElementById('method-manual');
+  const tabCsv = document.getElementById('tab-method-csv');
+  const tabManual = document.getElementById('tab-method-manual');
+  const isManual = method === 'manual';
+
+  csv.style.display = isManual ? 'none' : '';
+  manual.style.display = isManual ? '' : 'none';
+  tabCsv.classList.toggle('active', !isManual);
+  tabManual.classList.toggle('active', isManual);
+
+  document.getElementById('results-container').innerHTML = '';
 }
 
 let uploadedCsvFile = null;
@@ -280,18 +346,7 @@ function toggleAiKeyInput() {
   }
 }
 
-async function runAnalysis() {
-  if (!uploadedCsvFile) {
-    showError('No hay archivo CSV cargado.');
-    return;
-  }
-
-  const engineKey = window.State.selected_engine_key;
-  if (!engineKey) {
-    showError('No hay motor seleccionado. Vuelve al wizard.');
-    return;
-  }
-
+function buildAnalysisConfig() {
   const generatePdf = document.getElementById('chk-pdf') ? document.getElementById('chk-pdf').checked : false;
   const includeAi = document.getElementById('chk-ai') ? document.getElementById('chk-ai').checked : false;
   const openaiApiKey = document.getElementById('input-ai-key') ? document.getElementById('input-ai-key').value.trim() : '';
@@ -308,10 +363,13 @@ async function runAnalysis() {
     config.n_iteraciones = 10000;
   }
 
-  toggleSpinner(true);
+  return config;
+}
 
+async function analyzeFile(file, engineKey) {
+  toggleSpinner(true);
   try {
-    const result = await analyzeCsv(uploadedCsvFile, engineKey, config);
+    const result = await analyzeCsv(file, engineKey, buildAnalysisConfig());
     window.State.outputs = result;
     window.State.datos_procesados = true;
     toggleSpinner(false);
@@ -320,6 +378,84 @@ async function runAnalysis() {
     toggleSpinner(false);
     showError(`Error ejecutando el motor: ${err.message}`);
   }
+}
+
+async function runAnalysis() {
+  if (!uploadedCsvFile) {
+    showError('No hay archivo CSV cargado.');
+    return;
+  }
+
+  const engineKey = window.State.selected_engine_key;
+  if (!engineKey) {
+    showError('No hay motor seleccionado. Vuelve al wizard.');
+    return;
+  }
+
+  await analyzeFile(uploadedCsvFile, engineKey);
+}
+
+// Construye un CSV a partir de los totales agregados introducidos manualmente,
+// en el formato que espera el motor frecuentista seleccionado.
+function buildManualCsv(engineKey, va, ca, vb, cb) {
+  if (engineKey === 'freq_sid') {
+    // El motor con Session ID espera valores por sesión en dos columnas (A, B).
+    // Representamos los datos binomiales como vectores 0/1 (convierte / no convierte),
+    // estadísticamente equivalentes a los totales agregados.
+    const n = Math.max(va, vb);
+    const lines = ['A,B'];
+    for (let i = 0; i < n; i++) {
+      const a = i < va ? (i < ca ? 1 : 0) : '';
+      const b = i < vb ? (i < cb ? 1 : 0) : '';
+      lines.push(`${a},${b}`);
+    }
+    return lines.join('\n') + '\n';
+  }
+  // freq_no_sid: totales agregados en una sola fila.
+  return `Visitas A,Visitas B,Conversiones A,Conversiones B\n${va},${vb},${ca},${cb}\n`;
+}
+
+async function runManualAnalysis() {
+  const engineKey = window.State.selected_engine_key;
+  if (!engineKey) {
+    showError('No hay motor seleccionado. Vuelve al wizard.');
+    return;
+  }
+
+  const va = parseInt(document.getElementById('manual-a-visitas').value, 10);
+  const ca = parseInt(document.getElementById('manual-a-conv').value, 10);
+  const vb = parseInt(document.getElementById('manual-b-visitas').value, 10);
+  const cb = parseInt(document.getElementById('manual-b-conv').value, 10);
+
+  const campos = [
+    ['Usuarios / sesiones (A)', va],
+    ['Conversiones (A)', ca],
+    ['Usuarios / sesiones (B)', vb],
+    ['Conversiones (B)', cb],
+  ];
+  for (const [label, v] of campos) {
+    if (isNaN(v) || v < 0) {
+      showError(`Introduce un valor válido (entero ≥ 0) en "${label}".`);
+      return;
+    }
+  }
+  if (va === 0 || vb === 0) {
+    showError('Los usuarios / sesiones de A y B deben ser mayores que 0.');
+    return;
+  }
+  if (ca > va) {
+    showError('Las conversiones de A no pueden superar sus usuarios / sesiones.');
+    return;
+  }
+  if (cb > vb) {
+    showError('Las conversiones de B no pueden superar sus usuarios / sesiones.');
+    return;
+  }
+
+  const csv = buildManualCsv(engineKey, va, ca, vb, cb);
+  const file = new File([csv], 'datos_manuales.csv', { type: 'text/csv' });
+
+  await analyzeFile(file, engineKey);
 }
 
 function isBayesEngine() {

@@ -757,6 +757,41 @@ body {
   box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
 }
 
+/* Entrada manual de datos (frecuentista) */
+.manual-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.manual-entry-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-light);
+}
+
+.manual-entry-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.manual-entry-group .input-label {
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 700px) {
+  .manual-entry-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .choice-row {
