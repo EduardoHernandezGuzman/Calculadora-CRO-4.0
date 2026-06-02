@@ -17,7 +17,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None  # FastAPI app: streamlit es opcional
 from matplotlib.backends.backend_pdf import PdfPages
 
 try:
@@ -32,6 +35,11 @@ sns.set(style="whitegrid")
 
 
 def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+    """
+    Función opcional que envía los resultados a ChatGPT para obtener
+    una interpretación en lenguaje natural (como si fuera un Director de CRO).
+    Si no hay API key, simplemente devuelve un mensaje de error.
+    """
     if OpenAI is None:
         return "❌ La librería 'openai' no está instalada en este entorno."
 
@@ -112,6 +120,7 @@ ACCIÓN RECOMENDADA
 Justificación breve y directa.
 """.strip()
 
+    # Llamamos a ChatGPT con el prompt armado arriba
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -130,48 +139,95 @@ Justificación breve y directa.
 
 
 class AnalisisBootstrapAgregado:
+    """
+    Motor de análisis frecuentista mediante Bootstrap.
+    Toma los datos agregados (visitas y conversiones de A y B)
+    y remuestrea muchas veces para estimar la distribución de las tasas de conversión.
+    """
+
     def __init__(self, n_iteraciones: int = 10000):
+        # Número de remuestreos Bootstrap (por defecto 10,000)
         self.n_iter = int(n_iteraciones)
         self.resultados: Dict[str, Any] = {}
         self.distribuciones_medias: Dict[str, np.ndarray] = {}
         self.distribuciones_uplift_rel: Optional[np.ndarray] = None
 
     def analizar(self, n_a: int, conv_a: int, n_b: int, conv_b: int):
+        """
+        Paso 1: Convertir los datos agregados en vectores de 0s y 1s.
+        Ejemplo: si n_a=100 y conv_a=30, creamos un vector con 30 unos y 70 ceros.
+        """
         data_a = np.array([1] * int(conv_a) + [0] * int(n_a - conv_a))
         data_b = np.array([1] * int(conv_b) + [0] * int(n_b - conv_b))
 
         print(f"🔄 Iniciando Bootstrap con {self.n_iter} iteraciones...")
 
+        # Preparar arrays vacíos para guardar los resultados de cada remuestreo
         medias_a = np.zeros(self.n_iter)
         medias_b = np.zeros(self.n_iter)
         diferencias_ba = np.zeros(self.n_iter)
 
+        # --- BUCLE DE BOOTSTRAP ---
+        # Remuestreamos con reemplazo muchas veces para simular
+        # cómo se comportarían las tasas si repitiéramos el experimento.
         for i in range(self.n_iter):
+            # En cada iteración, cogemos una muestra aleatoria CON reemplazo
+            # del mismo tamaño que los datos originales y calculamos su media.
+            # Esto nos da una "versión simulada" de la tasa de conversión.
             m_a = np.mean(np.random.choice(data_a, size=len(data_a), replace=True))
             m_b = np.mean(np.random.choice(data_b, size=len(data_b), replace=True))
 
+            # Guardamos las tasas simuladas y su diferencia (B - A)
             medias_a[i] = m_a
             medias_b[i] = m_b
             diferencias_ba[i] = m_b - m_a
 
+        # Almacenamos las distribuciones completas para usarlas después en los gráficos
         self.distribuciones_medias["A"] = medias_a
         self.distribuciones_medias["B"] = medias_b
         self.distribuciones_medias["diferencia"] = diferencias_ba
 
+        # --- NIVEL DE SIGNIFICANCIA ---
+        # ¿Qué porcentaje de las simulaciones mostraron B > A?
+        # Si es >95%, decimos que B es significativamente mejor que A.
         precision_b_mejor = float(np.mean(diferencias_ba > 0))
 
+        # --- INTERVALO DE CONFIANZA de la DIFERENCIA ABSOLUTA (B - A) ---
+        # Ordenamos las 10,000 diferencias simuladas y cogemos:
+        #   - el percentil 2.5  (límite inferior del IC 95%)
+        #   - el percentil 97.5 (límite superior del IC 95%)
+        # Esto nos da el rango donde está el verdadero valor de la diferencia
+        # con un 95% de confianza.
         ci_low = float(np.percentile(diferencias_ba, 2.5))
         ci_high = float(np.percentile(diferencias_ba, 97.5))
 
+        # --- TASAS OBSERVADAS (reales, sin simular) ---
+        # Son las tasas que vimos realmente en el experimento.
         m_a_obs = conv_a / n_a if n_a != 0 else 0.0
         m_b_obs = conv_b / n_b if n_b != 0 else 0.0
 
+        # --- UPLIFT RELATIVO y sus INTERVALOS DE CONFIANZA ---
+        # El uplift relativo = (diferencia / tasa de A) * 100
+        # Nos dice el % de mejora (o empeoramiento) respecto a A.
         if m_a_obs != 0:
+            # Convertimos cada diferencia simulada a porcentaje relativo
             uplift_rel = (diferencias_ba / m_a_obs) * 100
+
+            # IC CENTRADO (Two-Tailed): del percentil 2.5 al 97.5
+            # Es el rango simétrico donde esperamos que esté el uplift real.
             ci_rel_centrado = np.percentile(uplift_rel, [2.5, 97.5]).astype(float)
+
+            # COLA DERECHA (One-Tailed, límite inferior):
+            #   percentil 5.0 → "¿Cuál es el mínimo uplift que podemos esperar
+            #   con un 95% de confianza?" (solo nos importa el límite de abajo).
             ci_rel_derecha_izq = float(np.percentile(uplift_rel, 5.0))
+
+            # COLA IZQUIERDA (One-Tailed, límite superior):
+            #   percentil 95.0 → "¿Cuál es el máximo riesgo/empeoramiento
+            #   que podemos esperar con un 95% de confianza?"
             ci_rel_izquierda_der = float(np.percentile(uplift_rel, 95.0))
         else:
+            # Si la tasa de A es 0, no podemos calcular porcentajes
             uplift_rel = np.zeros_like(diferencias_ba)
             ci_rel_centrado = np.array([0.0, 0.0], dtype=float)
             ci_rel_derecha_izq = 0.0
@@ -179,6 +235,7 @@ class AnalisisBootstrapAgregado:
 
         self.distribuciones_uplift_rel = uplift_rel
 
+        # Guardamos todos los resultados en un diccionario para usarlos después
         self.resultados = {
             "n_g1": int(n_a),
             "n_g2": int(n_b),
@@ -197,8 +254,12 @@ class AnalisisBootstrapAgregado:
         }
 
     def generar_reporte(self, pdf: Optional[PdfPages] = None):
+        """
+        Genera un reporte por consola o PDF con los resultados del análisis.
+        """
         r = self.resultados
 
+        # === RESULTADOS POR CONSOLA ===
         print("\n" + "=" * 50)
         print(f"{'ANÁLISIS DE PRECISIÓN B vs A':^50}")
         print("=" * 50)
@@ -223,6 +284,8 @@ class AnalisisBootstrapAgregado:
         )
         print("=" * 50)
 
+        # === PÁGINA DE TEXTO DEL PDF (si se genera) ===
+        # Pinta los mismos resultados en una hoja dentro del PDF
         if pdf:
             fig_t = plt.figure(figsize=(8, 6))
             txt = (
@@ -253,6 +316,9 @@ class AnalisisBootstrapAgregado:
             pdf.savefig(fig_t)
             plt.close(fig_t)
 
+        # === GRÁFICO DE LA DISTRIBUCIÓN DE LA DIFERENCIA (B - A) ===
+        # Muestra un histograma con todos los valores simulados de la diferencia
+        # para visualizar dónde cae la mayor parte de la masa probabilística.
         fig = plt.figure(figsize=(10, 6))
         sns.histplot(
             self.distribuciones_medias["diferencia"],
@@ -260,7 +326,9 @@ class AnalisisBootstrapAgregado:
             kde=True,
             element="step",
         )
+        # Línea roja discontinua en 0: marca "sin diferencia" (B = A)
         plt.axvline(0, color="red", linestyle="--", label="Sin diferencia")
+        # Líneas verdes punteadas: límites del IC 95% de la diferencia absoluta
         plt.axvline(
             r["ci_diferencia"][0],
             color="green",
@@ -284,28 +352,39 @@ class AnalisisBootstrapAgregado:
 
 
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Función principal que orquesta todo el análisis:
+      1. Lee los datos de un DataFrame
+      2. Ejecuta el Bootstrap
+      3. Genera reporte (consola, PDF, gráfico)
+      4. Opcionalmente pide interpretación a ChatGPT
+    """
     config = config or {}
     n_iteraciones = int(config.get("n_iteraciones", 10000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
 
+    # Verificamos que el DataFrame tenga las columnas que necesitamos
     required = ["Visitas A", "Visitas B", "Conversiones A", "Conversiones B"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Faltan columnas obligatorias en el CSV: {missing}")
 
+    # Sumamos todas las filas del CSV para tener los totales agregados
     total_v_a = int(df["Visitas A"].sum())
     total_v_b = int(df["Visitas B"].sum())
     total_c_a = int(df["Conversiones A"].sum())
     total_c_b = int(df["Conversiones B"].sum())
 
+    # === EJECUTAMOS EL BOOTSTRAP ===
     analisis = AnalisisBootstrapAgregado(n_iteraciones=n_iteraciones)
     analisis.analizar(total_v_a, total_c_a, total_v_b, total_c_b)
 
     figures: List[Any] = []
     pdf_bytes: Optional[bytes] = None
 
+    # === GENERAMOS REPORTE (consola y opcionalmente PDF) ===
     if generate_pdf:
         bio = io.BytesIO()
         with PdfPages(bio) as pdf:
@@ -318,10 +397,12 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         if fig_diff is not None:
             figures.append(fig_diff)
 
+    # === INTERPRETACIÓN CON IA (opcional) ===
     log_text = ""
     if include_ai:
         log_text = interpretar_resultados_con_ia(analisis.resultados, api_key=openai_api_key)
 
+    # === ARMAMOS EL RESUMEN FINAL ===
     r = analisis.resultados
     uplift_pct = (
         ((r["media_real_g2"] - r["media_real_g1"]) / r["media_real_g1"] * 100)

@@ -140,33 +140,57 @@
       <!-- STEP 3b: Freq - interval type -->
       <div id="step-3-freq" class="step-block">
         <div class="step-content">
-          <div class="result-card">
-            <div class="choice-title">&iquest;Qu&eacute; tipo de intervalo quieres utilizar para interpretar el uplift relativo?</div>
-            <div class="choice-text">Selecciona el tipo de intervalo de confianza que mejor se adapta a tu hip&oacute;tesis de test.</div>
-          </div>
-          <div class="choice-row">
-            <div class="choice-card" data-value="centrado" onclick="selectFreqInterval('centrado')">
-              <div class="choice-title">IC Centrado</div>
-              <div class="choice-text">
-                Muestra el intervalo de confianza centrado del uplift relativo. Opci&oacute;n est&aacute;ndar y m&aacute;s habitual para tests bidireccionales.
+
+          <!-- Sub-step 3b.1: número de colas -->
+          <div id="freq-tail-choice">
+            <div class="result-card">
+              <div class="choice-title">&iquest;Cu&aacute;ntas colas quieres utilizar para interpretar el uplift relativo?</div>
+              <div class="choice-text">Selecciona el tipo de contraste de hip&oacute;tesis que mejor se adapta a tu test.</div>
+            </div>
+            <div class="choice-row">
+              <div class="choice-card" data-value="una" onclick="selectFreqTails('una')">
+                <div class="choice-title">1 cola</div>
+                <div class="choice-text">
+                  Se analiza &uacute;nicamente una diferencia en una direcci&oacute;n espec&iacute;fica (mejora o empeoramiento). En el siguiente paso elegir&aacute;s la cola derecha o izquierda.
+                </div>
+              </div>
+              <div class="choice-card" data-value="dos" onclick="selectFreqTails('dos')">
+                <div class="choice-title">2 colas</div>
+                <div class="choice-text">
+                  Muestra el IC centrado del uplift relativo. Analiza cualquier diferencia, tanto mejora como empeoramiento. Opci&oacute;n est&aacute;ndar para tests bidireccionales.
+                </div>
               </div>
             </div>
-            <div class="choice-card" data-value="derecha" onclick="selectFreqInterval('derecha')">
-              <div class="choice-title">Cola derecha</div>
-              <div class="choice-text">
-                Utiliza el IC 95% izquierda. Indica el m&iacute;nimo uplift que podemos esperar con un 95% de confianza.
-              </div>
-            </div>
-            <div class="choice-card" data-value="izquierda" onclick="selectFreqInterval('izquierda')">
-              <div class="choice-title">Cola izquierda</div>
-              <div class="choice-text">
-                Utiliza el IC 95% derecha. Indica el m&aacute;ximo riesgo de p&eacute;rdida con un 95% de confianza.
-              </div>
+            <div class="btn-row">
+              <button class="btn-back" onclick="goToStep(2)">&#11013;&#65039; Volver</button>
             </div>
           </div>
-          <div class="btn-row">
-            <button class="btn-back" onclick="goToStep(2)">&#11013;&#65039; Volver</button>
+
+          <!-- Sub-step 3b.2: dirección de la cola (solo para 1 cola) -->
+          <div id="freq-direction-choice" style="display:none;">
+            <div class="result-card">
+              <div class="choice-title">&iquest;Qu&eacute; cola quieres utilizar?</div>
+              <div class="choice-text">Selecciona la direcci&oacute;n de la hip&oacute;tesis que quieres contrastar.</div>
+            </div>
+            <div class="choice-row">
+              <div class="choice-card" data-value="derecha" onclick="selectFreqInterval('derecha')">
+                <div class="choice-title">Cola derecha</div>
+                <div class="choice-text">
+                  Utiliza el IC 95% izquierda. Indica el m&iacute;nimo uplift que podemos esperar con un 95% de confianza.
+                </div>
+              </div>
+              <div class="choice-card" data-value="izquierda" onclick="selectFreqInterval('izquierda')">
+                <div class="choice-title">Cola izquierda</div>
+                <div class="choice-text">
+                  Utiliza el IC 95% derecha. Indica el m&aacute;ximo riesgo de p&eacute;rdida con un 95% de confianza.
+                </div>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn-back" onclick="showFreqTailChoice()">&#11013;&#65039; Volver</button>
+            </div>
           </div>
+
         </div>
       </div>
 

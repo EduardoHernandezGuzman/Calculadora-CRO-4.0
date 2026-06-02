@@ -21,7 +21,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None  # FastAPI app: streamlit es opcional
 from matplotlib.backends.backend_pdf import PdfPages
 
 try:

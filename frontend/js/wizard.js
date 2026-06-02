@@ -54,6 +54,28 @@ function selectBayesType(value) {
   renderStep4Summary();
 }
 
+function selectFreqTails(value) {
+  if (value === 'dos') {
+    // Dos colas → IC centrado (two-tailed)
+    selectFreqInterval('centrado');
+  } else {
+    // Una cola → elegir dirección (derecha / izquierda)
+    showFreqDirectionChoice();
+  }
+}
+
+function showFreqTailChoice() {
+  clearSelection();
+  document.getElementById('freq-tail-choice').style.display = '';
+  document.getElementById('freq-direction-choice').style.display = 'none';
+}
+
+function showFreqDirectionChoice() {
+  clearSelection();
+  document.getElementById('freq-tail-choice').style.display = 'none';
+  document.getElementById('freq-direction-choice').style.display = '';
+}
+
 function selectFreqInterval(value) {
   window.State.freq_interval_type = value;
   window.State.tipo_valores = value;
@@ -68,6 +90,10 @@ function goToStep(step) {
   if (step === 2) {
     const enfoqueLabel = window.State.enfoque === 'bayesiano' ? 'Bayesiano' : 'Frecuentista';
     document.getElementById('step2-enfoque').textContent = enfoqueLabel;
+  }
+
+  if (step === 3 && window.State.enfoque === 'frecuentista') {
+    showFreqTailChoice();
   }
 }
 
