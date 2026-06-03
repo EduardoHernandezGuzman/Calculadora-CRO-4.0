@@ -5,6 +5,8 @@ const ENGINES_MAP = {
   bayes_0_inf_sid: 'Bayesiana [0,∞] con Session ID',
   freq_no_sid: 'Frecuentista (Bootstrap) sin Session ID',
   freq_sid: 'Frecuentista (Bootstrap) con Session ID',
+  freq_pvalue_no_sid: 'Frecuentista (p-value) sin Session ID',
+  freq_pvalue_sid: 'Frecuentista (p-value) con Session ID',
 };
 
 function getEngineKey() {
@@ -21,6 +23,9 @@ function getEngineKey() {
   if (enfoque === 'frecuentista') {
     return sid ? 'freq_sid' : 'freq_no_sid';
   }
+  if (enfoque === 'freq_pvalue') {
+    return sid ? 'freq_pvalue_sid' : 'freq_pvalue_no_sid';
+  }
   return null;
 }
 
@@ -28,7 +33,7 @@ function isRouteReady() {
   const s = window.State;
   if (!s.enfoque || s.session_id === null || s.session_id === undefined) return false;
   if (s.enfoque === 'bayesiano' && !s.tipo_valores) return false;
-  if (s.enfoque === 'frecuentista' && !s.freq_interval_type) return false;
+  if ((s.enfoque === 'frecuentista' || s.enfoque === 'freq_pvalue') && !s.freq_interval_type) return false;
   return true;
 }
 
@@ -88,8 +93,8 @@ function goToStep(step) {
   showStep(step);
 
   if (step === 2) {
-    const enfoqueLabel = window.State.enfoque === 'bayesiano' ? 'Bayesiano' : 'Frecuentista';
-    document.getElementById('step2-enfoque').textContent = enfoqueLabel;
+    const labelMap = { bayesiano: 'Bayesiano', frecuentista: 'Frecuentista (Bootstrap)', freq_pvalue: 'Frecuentista (p-value)' };
+    document.getElementById('step2-enfoque').textContent = labelMap[window.State.enfoque] || 'Frecuentista';
   }
 
   if (step === 3 && window.State.enfoque === 'frecuentista') {
@@ -129,11 +134,19 @@ function renderStep4Summary() {
       ? 'El CSV deberá contener SessionID y conversiones por sesión.'
       : 'El CSV deberá contener datos agregados por día (Conversiones X / Visitas X).';
     extra += `<br>Tipo de conversiones: <b>${tv}</b>`;
+  } else if (s.enfoque === 'freq_pvalue') {
+    const intervalMap = { centrado: 'Dos colas (IC centrado)', derecha: 'Una cola derecha', izquierda: 'Una cola izquierda' };
+    const testMap = { true: 't-test de Welch (con Session ID)', false: 'z-test de proporciones (sin Session ID)' };
+    extra = s.session_id
+      ? 'CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
+      : 'CSV agregado con Visitas/Conversiones A y B.';
+    extra += `<br>Test: <b>${testMap[String(s.session_id)]}</b>`;
+    extra += `<br>Contraste: <b>${intervalMap[s.freq_interval_type]}</b>`;
   } else {
     const intervalMap = { centrado: 'IC centrado', derecha: 'Cola derecha (IC 95% izquierda)', izquierda: 'Cola izquierda (IC 95% derecha)' };
     extra = s.session_id
-      ? 'Frecuentista con Session ID: CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
-      : 'Frecuentista sin Session ID: CSV agregado con Visitas/Conversiones A y B.';
+      ? 'Frecuentista (Bootstrap) con Session ID: CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
+      : 'Frecuentista (Bootstrap) sin Session ID: CSV agregado con Visitas/Conversiones A y B.';
     extra += `<br><br>Intervalo seleccionado: <b>${intervalMap[s.freq_interval_type]}</b>`;
   }
 

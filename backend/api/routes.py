@@ -17,6 +17,8 @@ from backend.core.engine_router import (
     ENGINE_0_INF_SID,
     ENGINE_FREQ_NO_SID,
     ENGINE_FREQ_SID,
+    ENGINE_FREQ_PVALUE_NO_SID,
+    ENGINE_FREQ_PVALUE_SID,
     ENGINE_LABELS,
     get_engine_label,
     run_engine,
@@ -71,6 +73,14 @@ ENGINES_META = {
     ENGINE_FREQ_SID: EngineInfo(
         key=ENGINE_FREQ_SID, label=ENGINE_LABELS[ENGINE_FREQ_SID],
         enfoque="frecuentista", tipo="freq",
+    ),
+    ENGINE_FREQ_PVALUE_NO_SID: EngineInfo(
+        key=ENGINE_FREQ_PVALUE_NO_SID, label=ENGINE_LABELS[ENGINE_FREQ_PVALUE_NO_SID],
+        enfoque="freq_pvalue", tipo="freq_pvalue",
+    ),
+    ENGINE_FREQ_PVALUE_SID: EngineInfo(
+        key=ENGINE_FREQ_PVALUE_SID, label=ENGINE_LABELS[ENGINE_FREQ_PVALUE_SID],
+        enfoque="freq_pvalue", tipo="freq_pvalue",
     ),
 }
 

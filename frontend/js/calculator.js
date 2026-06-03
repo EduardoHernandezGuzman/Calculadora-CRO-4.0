@@ -398,7 +398,7 @@ async function runAnalysis() {
 // Construye un CSV a partir de los totales agregados introducidos manualmente,
 // en el formato que espera el motor frecuentista seleccionado.
 function buildManualCsv(engineKey, va, ca, vb, cb) {
-  if (engineKey === 'freq_sid') {
+  if (engineKey === 'freq_sid' || engineKey === 'freq_pvalue_sid') {
     // El motor con Session ID espera valores por sesión en dos columnas (A, B).
     // Representamos los datos binomiales como vectores 0/1 (convierte / no convierte),
     // estadísticamente equivalentes a los totales agregados.
@@ -460,12 +460,17 @@ async function runManualAnalysis() {
 
 function isBayesEngine() {
   const k = window.State.selected_engine_key;
-  return k && (k.startsWith('bayes_'));
+  return k && k.startsWith('bayes_');
 }
 
 function isFreqEngine() {
   const k = window.State.selected_engine_key;
-  return k && (k.startsWith('freq_'));
+  return k && k.startsWith('freq_');
+}
+
+function isPvalueEngine() {
+  const k = window.State.selected_engine_key;
+  return k && k.startsWith('freq_pvalue');
 }
 
 function displayResults(out) {
@@ -689,8 +694,27 @@ function renderFreqConsoleBlocks(out) {
 
   lines.push('--------------------------------------------------');
 
-  const significancia = parseFloat(r.precision_B_mejor || 0) * 100;
-  lines.push('NIVEL DE SIGNIFICANCIA DE QUE B > A: ' + significancia.toFixed(2) + '%');
+  if (isPvalueEngine()) {
+    const z = parseFloat(r.z_stat || 0).toFixed(4);
+    const statLabel = window.State.session_id ? 'ESTADÍSTICO T (Welch)' : 'ESTADÍSTICO Z';
+    lines.push(statLabel + ': ' + z);
+    if (intervalType === 'centrado') {
+      const pv = parseFloat(r.p_value_two !== undefined ? r.p_value_two : 1).toFixed(4);
+      lines.push('P-VALUE (dos colas): ' + pv);
+      lines.push(parseFloat(pv) < 0.05 ? '✓ SIGNIFICATIVO (p < 0.05)' : '✗ NO SIGNIFICATIVO (p ≥ 0.05)');
+    } else if (intervalType === 'derecha') {
+      const pv = parseFloat(r.p_value_right !== undefined ? r.p_value_right : 1).toFixed(4);
+      lines.push('P-VALUE (cola derecha, H₁: B > A): ' + pv);
+      lines.push(parseFloat(pv) < 0.05 ? '✓ SIGNIFICATIVO (p < 0.05)' : '✗ NO SIGNIFICATIVO (p ≥ 0.05)');
+    } else if (intervalType === 'izquierda') {
+      const pv = parseFloat(r.p_value_left !== undefined ? r.p_value_left : 1).toFixed(4);
+      lines.push('P-VALUE (cola izquierda, H₁: B < A): ' + pv);
+      lines.push(parseFloat(pv) < 0.05 ? '✓ SIGNIFICATIVO (p < 0.05)' : '✗ NO SIGNIFICATIVO (p ≥ 0.05)');
+    }
+  } else {
+    const significancia = parseFloat(r.precision_B_mejor || 0) * 100;
+    lines.push('NIVEL DE SIGNIFICANCIA DE QUE B > A: ' + significancia.toFixed(2) + '%');
+  }
 
   if (intervalType === 'centrado') {
     const low = r.ci_uplift_center_low;

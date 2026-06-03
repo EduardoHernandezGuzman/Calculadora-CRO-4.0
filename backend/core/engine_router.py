@@ -11,6 +11,8 @@ ENGINE_0_INF_SID = "bayes_0_inf_sid"
 
 ENGINE_FREQ_NO_SID = "freq_no_sid"
 ENGINE_FREQ_SID = "freq_sid"
+ENGINE_FREQ_PVALUE_NO_SID = "freq_pvalue_no_sid"
+ENGINE_FREQ_PVALUE_SID = "freq_pvalue_sid"
 
 ENGINE_LABELS = {
     ENGINE_0_1_NO_SID: "Bayesiana [0,1] sin Session ID",
@@ -19,6 +21,8 @@ ENGINE_LABELS = {
     ENGINE_0_INF_SID: "Bayesiana [0,∞] con Session ID",
     ENGINE_FREQ_NO_SID: "Frecuentista (Bootstrap) sin Session ID",
     ENGINE_FREQ_SID: "Frecuentista (Bootstrap) con Session ID",
+    ENGINE_FREQ_PVALUE_NO_SID: "Frecuentista (p-value) sin Session ID",
+    ENGINE_FREQ_PVALUE_SID: "Frecuentista (p-value) con Session ID",
 }
 
 
@@ -95,6 +99,28 @@ def run_engine(engine_key: str, df: pd.DataFrame, config: Dict[str, Any]) -> Eng
 
     if engine_key == ENGINE_FREQ_SID:
         from backend.engines import varios_disenos_frecuentista_sessionid as mod
+        out = mod.run(df=df, config=config)
+        return EngineOutput(
+            summary=out.get("summary"),
+            figures=out.get("figures"),
+            pdf_bytes=out.get("pdf_bytes"),
+            log_text=out.get("log_text"),
+            comparisons=out.get("comparisons"),
+        )
+
+    if engine_key == ENGINE_FREQ_PVALUE_NO_SID:
+        from backend.engines import varios_diseno_frecuentista_pvalue as mod
+        out = mod.run(df=df, config=config)
+        return EngineOutput(
+            summary=out.get("summary"),
+            figures=out.get("figures"),
+            pdf_bytes=out.get("pdf_bytes"),
+            log_text=out.get("log_text"),
+            comparisons=out.get("comparisons"),
+        )
+
+    if engine_key == ENGINE_FREQ_PVALUE_SID:
+        from backend.engines import varios_disenos_frecuentista_pvalue_sessionid as mod
         out = mod.run(df=df, config=config)
         return EngineOutput(
             summary=out.get("summary"),

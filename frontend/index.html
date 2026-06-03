@@ -51,12 +51,24 @@
               </div>
             </div>
             <div class="choice-card" data-value="frecuentista" onclick="selectModel('frecuentista')">
-              <div class="choice-title">Modelo Frecuentista</div>
+              <div class="choice-title">Frecuentista (Bootstrap)</div>
               <div class="choice-text">
-                El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar, respondiendo preguntas como: &quot;&iquest;la diferencia entre A y B es estad&iacute;sticamente significativa?&quot; o &quot;&iquest;podemos rechazar la hip&oacute;tesis nula?&quot;.
+                Estima la distribuci&oacute;n del uplift mediante remuestreo aleatorio (bootstrap). Ofrece intervalos de confianza flexibles, aunque los resultados tienen peque&ntilde;as variaciones entre ejecuciones por su naturaleza aleatoria.
                 <ul>
-                  <li>Debes calcular previamente la muestra y esperar hasta alcanzarla.</li>
-                  <li>An&aacute;lisis de resultados basado en p-value.</li>
+                  <li>No requiere supuestos de normalidad.</li>
+                  <li>10.000 iteraciones de remuestreo.</li>
+                  <li>Resultados pueden variar ligeramente entre ejecuciones.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="choice-card" data-value="freq_pvalue" onclick="selectModel('freq_pvalue')">
+              <div class="choice-title">Frecuentista (p-value)</div>
+              <div class="choice-text">
+                Contraste cl&aacute;sico de hip&oacute;tesis mediante z-test de proporciones (sin Session ID) o t-test de Welch (con Session ID). Resultados 100% deterministas: el mismo CSV siempre produce el mismo resultado.
+                <ul>
+                  <li>C&aacute;lculo anal&iacute;tico, sin aleatoriedad.</li>
+                  <li>P-value, estad&iacute;stico Z/T e IC cl&aacute;sicos.</li>
+                  <li>Requiere supuestos de normalidad para muestras peque&ntilde;as.</li>
                 </ul>
               </div>
             </div>
