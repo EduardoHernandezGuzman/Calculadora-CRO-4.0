@@ -107,7 +107,7 @@ function showWizardStep3Bayes() {
   const sidTxt = sid ? 'con Session ID' : 'sin Session ID';
   const extra = sid
     ? 'De esta manera, el CSV de tu test A/B deber\u00e1 contener una columna con los Session ID.'
-    : 'El an\u00e1lisis se realizar\u00e1 utilizando eventos y sesiones agregados.';
+    : 'Analizar\u00e1s tus resultados del test desglosando por d\u00eda para analizar la tendencia.';
   document.getElementById('step3-subtitle').innerHTML =
     `Analizar\u00e1s tu test A/B ${sidTxt}.`;
   document.getElementById('step3-subtitle-extra').textContent = extra;
@@ -122,41 +122,26 @@ function showWizardStep3Freq() {
 }
 
 function renderStep4Summary() {
-  const engineKey = getEngineKey();
-  const label = ENGINES_MAP[engineKey] || engineKey;
-
   const s = window.State;
-  let extra = '';
+  let summary = '';
 
   if (s.enfoque === 'bayesiano') {
-    const tv = s.tipo_valores === '0_1' ? 'Conversiones únicas (Beta-Binomial)' : 'Conversiones múltiples (Gamma-Poisson)';
-    extra = s.session_id
-      ? 'El CSV deberá contener SessionID y conversiones por sesión.'
-      : 'El CSV deberá contener datos agregados por día (Conversiones X / Visitas X).';
-    extra += `<br>Tipo de conversiones: <b>${tv}</b>`;
-  } else if (s.enfoque === 'freq_pvalue') {
-    const intervalMap = { centrado: 'Dos colas (IC centrado)', derecha: 'Una cola derecha', izquierda: 'Una cola izquierda' };
-    const testMap = { true: 't-test de Welch (con Session ID)', false: 'z-test de proporciones (sin Session ID)' };
-    extra = s.session_id
-      ? 'CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
-      : 'CSV agregado con Visitas/Conversiones A y B.';
-    extra += `<br>Test: <b>${testMap[String(s.session_id)]}</b>`;
-    extra += `<br>Contraste: <b>${intervalMap[s.freq_interval_type]}</b>`;
+    const conversionType = s.tipo_valores === '0_1' ? 'conversiones únicas' : 'conversiones múltiples';
+    summary = `Analizarás tu test A/B con ${conversionType}.`;
   } else {
-    const intervalMap = { centrado: 'IC centrado', derecha: 'Cola derecha (IC 95% izquierda)', izquierda: 'Cola izquierda (IC 95% derecha)' };
-    extra = s.session_id
-      ? 'Frecuentista (Bootstrap) con Session ID: CSV con columnas A y B (valores por sesión), NaN cuando no aplica.'
-      : 'Frecuentista (Bootstrap) sin Session ID: CSV agregado con Visitas/Conversiones A y B.';
-    extra += `<br><br>Intervalo seleccionado: <b>${intervalMap[s.freq_interval_type]}</b>`;
+    const hypothesis = {
+      centrado: 'hipótesis de dos colas, analizando cualquier diferencia en la métrica objetivo',
+      derecha: 'hipótesis de una cola analizando si mejora la métrica objetivo (cola derecha)',
+      izquierda: 'hipótesis de una cola analizando si empeora la métrica objetivo (cola izquierda)',
+    };
+    summary = `Analizarás tu test A/B mediante ${hypothesis[s.freq_interval_type]}.`;
   }
 
   document.getElementById('step4-summary').innerHTML = `
     <div class="result-card">
-      <div class="choice-title">¡Listo!</div>
+      <div class="choice-title">¡Perfecto!</div>
       <div class="choice-text">
-        Ruta disponible ✅<br>
-        Motor seleccionado: <b>${label}</b><br><br>
-        ${extra}
+        ${summary}
       </div>
     </div>
     <div class="btn-row" style="justify-content:center;">

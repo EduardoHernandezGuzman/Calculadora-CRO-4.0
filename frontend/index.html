@@ -31,7 +31,7 @@
           <div class="result-card">
             <div class="choice-title">¡Bienvenido a la calculadora de tests A/B!</div>
             <div class="choice-text">
-              Esta calculadora te ayudar&aacute; a tomar decisiones basadas en datos eligiendo entre el enfoque bayesiano o frecuentista.
+              Esta calculadora te ayudar&aacute; a tomar decisiones basadas en datos eligiendo entre el enfoque bayesiano o frecuentista, los dos modelos estad&iacute;sticos m&aacute;s comunes.
             </div>
           </div>
           <div class="result-card">
@@ -51,24 +51,22 @@
               </div>
             </div>
             <div class="choice-card" data-value="frecuentista" onclick="selectModel('frecuentista')">
-              <div class="choice-title">Frecuentista (Bootstrap)</div>
+              <div class="choice-title">Modelo Frecuentista (Bootstrap)</div>
               <div class="choice-text">
-                Estima la distribuci&oacute;n del uplift mediante remuestreo aleatorio (bootstrap). Ofrece intervalos de confianza flexibles, aunque los resultados tienen peque&ntilde;as variaciones entre ejecuciones por su naturaleza aleatoria.
+                El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar, respondiendo preguntas como: &ldquo;&iquest;la diferencia entre A y B es estad&iacute;sticamente significativa?&rdquo; o &ldquo;&iquest;podemos rechazar la hip&oacute;tesis nula?&rdquo;.
                 <ul>
-                  <li>No requiere supuestos de normalidad.</li>
-                  <li>10.000 iteraciones de remuestreo.</li>
-                  <li>Resultados pueden variar ligeramente entre ejecuciones.</li>
+                  <li>Debes calcular previamente la muestra y esperar hasta alcanzarla.</li>
+                  <li>An&aacute;lisis de resultados basado en p-value.</li>
                 </ul>
               </div>
             </div>
             <div class="choice-card" data-value="freq_pvalue" onclick="selectModel('freq_pvalue')">
-              <div class="choice-title">Frecuentista (p-value)</div>
+              <div class="choice-title">Modelo Frecuentista (p-value)</div>
               <div class="choice-text">
-                Contraste cl&aacute;sico de hip&oacute;tesis mediante z-test de proporciones (sin Session ID) o t-test de Welch (con Session ID). Resultados 100% deterministas: el mismo CSV siempre produce el mismo resultado.
+                El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar, respondiendo preguntas como: &ldquo;&iquest;la diferencia entre A y B es estad&iacute;sticamente significativa?&rdquo; o &ldquo;&iquest;podemos rechazar la hip&oacute;tesis nula?&rdquo;.
                 <ul>
-                  <li>C&aacute;lculo anal&iacute;tico, sin aleatoriedad.</li>
-                  <li>P-value, estad&iacute;stico Z/T e IC cl&aacute;sicos.</li>
-                  <li>Requiere supuestos de normalidad para muestras peque&ntilde;as.</li>
+                  <li>Debes calcular previamente la muestra y esperar hasta alcanzarla.</li>
+                  <li>An&aacute;lisis de resultados basado en p-value.</li>
                 </ul>
               </div>
             </div>
@@ -85,29 +83,32 @@
               Has seleccionado analizar tu test A/B con el modelo <b id="step2-enfoque"></b>.
             </div>
           </div>
-          <div class="choice-text" style="text-align:center;margin-bottom:0.5rem;">
-            &iquest;Puedes analizar tu test A/B con &quot;Session ID&quot; de cada sesi&oacute;n que ha formado parte del experimento?
-          </div>
           <div class="result-card">
+            <div class="choice-title">&iquest;Puedes analizar tu test A/B con &lsquo;Session ID&rsquo; de cada sesi&oacute;n que ha formado parte del experimento?</div>
             <div class="choice-text">
               Para analizar correctamente un experimento A/B es necesario definir la unidad de an&aacute;lisis.
               <br><br>
-              En entornos web, el uso del &quot;Session ID&quot; de Google Analytics 4 (GA4) permite identificar exposiciones y conversiones a nivel de sesi&oacute;n, evitando duplicidades y sesgos en el c&aacute;lculo de resultados. Si dispones de Session ID, deber&aacute;s a&ntilde;adir al CSV una columna con dichos datos.
+              En entornos web, el uso del &lsquo;Session ID&rsquo; de Google Analytics 4 (GA4) permite identificar conversiones a nivel de sesi&oacute;n, evitando duplicidades y sesgos en el c&aacute;lculo de resultados.
+              <ul>
+                <li>Sin Session ID analizar&aacute;s tus resultados del test desglosando por d&iacute;a para analizar la tendencia.</li>
+                <li>Si dispones de Session ID, deber&aacute;s a&ntilde;adir al CSV una columna con dichos datos adem&aacute;s de la columna &ldquo;D&iacute;a&rdquo;.</li>
+              </ul>
+              Podr&aacute;s visualizar posteriormente un CSV de ejemplo para introducirlo correctamente.
               <br><br>
               &iquest;Es posible analizar este experimento utilizando el Session ID de GA4?
             </div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="true" onclick="selectSessionId(true)">
-              <div class="choice-title">&#9989; Con Session ID</div>
+              <div class="choice-title">Tengo Session ID</div>
               <div class="choice-text">
-                Dispondr&aacute;s de mayor precisi&oacute;n en el an&aacute;lisis al identificar exposiciones y conversiones a nivel de sesi&oacute;n, evitando duplicidades. El CSV deber&aacute; incluir una columna con los Session ID de GA4.
+                El CSV deber&aacute; incluir una columna con los Session ID de GA4.
               </div>
             </div>
             <div class="choice-card" data-value="false" onclick="selectSessionId(false)">
-              <div class="choice-title">&#10060; Sin Session ID</div>
+              <div class="choice-title">No tengo Session ID</div>
               <div class="choice-text">
-                El an&aacute;lisis se realizar&aacute; utilizando eventos y sesiones agregados. El CSV deber&aacute; contener datos de visitas y conversiones agregados por d&iacute;a para cada variante.
+                Los resultados del test se analizar&aacute;n desglosados por d&iacute;a.
               </div>
             </div>
           </div>
@@ -127,17 +128,22 @@
           </div>
           <div class="result-card">
             <div class="choice-title">&iquest;Los usuarios pueden convertir una sola vez o m&aacute;s de una vez la m&eacute;trica a analizar?</div>
-            <div class="choice-text">Selecciona el tipo de conversi&oacute;n que mejor describe tu m&eacute;trica objetivo.</div>
+            <div class="choice-text">
+              <ul>
+                <li>Conversiones &uacute;nicas: el usuario puede convertir una sola vez; se analizar&aacute; mediante la distribuci&oacute;n previa Beta, ideal para analizar conversiones (siendo 0 la no conversi&oacute;n y 1 si el usuario ha convertido en la sesi&oacute;n).</li>
+                <li>Conversiones m&uacute;ltiples: con esta opci&oacute;n se analizar&aacute; mediante la distribuci&oacute;n previa Gamma-Poisson, es adecuada para conteos de m&eacute;tricas.</li>
+              </ul>
+            </div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="0_1" onclick="selectBayesType('0_1')">
-              <div class="choice-title">Conversiones &uacute;nicas</div>
+              <div class="choice-title">Analizar con conversiones &uacute;nicas</div>
               <div class="choice-text">
                 El usuario puede convertir una sola vez. Se analiza mediante la distribuci&oacute;n previa <b>Beta</b>, ideal para conversiones donde 0 = no convierte y 1 = convierte en la sesi&oacute;n.
               </div>
             </div>
             <div class="choice-card" data-value="0_inf" onclick="selectBayesType('0_inf')">
-              <div class="choice-title">Conversiones m&uacute;ltiples</div>
+              <div class="choice-title">Analizar con conversiones m&uacute;ltiples</div>
               <div class="choice-text">
                 Se analiza mediante la distribuci&oacute;n previa <b>Gamma-Poisson</b>, adecuada para conteos de m&eacute;tricas donde un usuario puede convertir m&aacute;s de una vez.
               </div>
@@ -156,18 +162,23 @@
           <!-- Sub-step 3b.1: número de colas -->
           <div id="freq-tail-choice">
             <div class="result-card">
-              <div class="choice-title">&iquest;Cu&aacute;ntas colas quieres utilizar para interpretar el uplift relativo?</div>
-              <div class="choice-text">Selecciona el tipo de contraste de hip&oacute;tesis que mejor se adapta a tu test.</div>
+              <div class="choice-title">&iquest;C&oacute;mo es el tipo de hip&oacute;tesis que planteas para tu experimento?</div>
+              <div class="choice-text">
+                <ul>
+                  <li>One-Tailed: se analiza &uacute;nicamente una diferencia en una direcci&oacute;n espec&iacute;fica, ya sea mejora o empeora la m&eacute;trica objetivo. En caso de seleccionar One-Tailed, en el siguiente paso se indicar&aacute; si el an&aacute;lisis debe detectar una mejora o un empeoramiento de la m&eacute;trica.</li>
+                  <li>Two-Tailed: se analiza cualquier diferencia, tanto mejora como empeoramiento. Este enfoque eval&uacute;a si existe un efecto estad&iacute;sticamente significativo sin asumir de antemano el sentido del cambio.</li>
+                </ul>
+              </div>
             </div>
             <div class="choice-row">
               <div class="choice-card" data-value="una" onclick="selectFreqTails('una')">
-                <div class="choice-title">1 cola</div>
+                <div class="choice-title">One-Tailed</div>
                 <div class="choice-text">
                   Se analiza &uacute;nicamente una diferencia en una direcci&oacute;n espec&iacute;fica (mejora o empeoramiento). En el siguiente paso elegir&aacute;s la cola derecha o izquierda.
                 </div>
               </div>
               <div class="choice-card" data-value="dos" onclick="selectFreqTails('dos')">
-                <div class="choice-title">2 colas</div>
+                <div class="choice-title">Two-Tailed</div>
                 <div class="choice-text">
                   Muestra el IC centrado del uplift relativo. Analiza cualquier diferencia, tanto mejora como empeoramiento. Opci&oacute;n est&aacute;ndar para tests bidireccionales.
                 </div>
@@ -181,18 +192,23 @@
           <!-- Sub-step 3b.2: dirección de la cola (solo para 1 cola) -->
           <div id="freq-direction-choice" style="display:none;">
             <div class="result-card">
-              <div class="choice-title">&iquest;Qu&eacute; cola quieres utilizar?</div>
-              <div class="choice-text">Selecciona la direcci&oacute;n de la hip&oacute;tesis que quieres contrastar.</div>
+              <div class="choice-title">&iquest;En qu&eacute; sentido quieres evaluar la diferencia entre tu versi&oacute;n control y tu versi&oacute;n variante?</div>
+              <div class="choice-text">
+                <ul>
+                  <li>La variante mejora la m&eacute;trica (cola derecha): se eval&uacute;a si el valor de la m&eacute;trica en la variante es mayor que en el control, seg&uacute;n el criterio definido para el experimento. Ejemplos: compras, a&ntilde;adidos al carrito o visualizaciones de producto.</li>
+                  <li>La variante empeora la m&eacute;trica (cola izquierda): se eval&uacute;a si el valor de la m&eacute;trica en la variante es menor que en el control, seg&uacute;n el criterio definido para el experimento. Ejemplos: desinstalaciones de una app, churn rate.</li>
+                </ul>
+              </div>
             </div>
             <div class="choice-row">
               <div class="choice-card" data-value="derecha" onclick="selectFreqInterval('derecha')">
-                <div class="choice-title">Cola derecha</div>
+                <div class="choice-title">Mejora la m&eacute;trica (cola derecha)</div>
                 <div class="choice-text">
                   Utiliza el IC 95% izquierda. Indica el m&iacute;nimo uplift que podemos esperar con un 95% de confianza.
                 </div>
               </div>
               <div class="choice-card" data-value="izquierda" onclick="selectFreqInterval('izquierda')">
-                <div class="choice-title">Cola izquierda</div>
+                <div class="choice-title">Empeora la m&eacute;trica (cola izquierda)</div>
                 <div class="choice-text">
                   Utiliza el IC 95% derecha. Indica el m&aacute;ximo riesgo de p&eacute;rdida con un 95% de confianza.
                 </div>
