@@ -17,6 +17,8 @@ import seaborn as sns
 from scipy import stats
 from matplotlib.backends.backend_pdf import PdfPages
 
+from backend.core.frequentist_ai_prompt import build_frequentist_ai_prompt
+
 try:
     import streamlit as st
 except Exception:
@@ -198,26 +200,15 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
     if client is None:
         return ""
 
-    r = resultados
-    sig = "sí" if r["p_value_two"] < 0.05 else "no"
-    prompt = f"""
-Eres un Director de CRO. Analiza estos resultados de un test A/B (t-test de Welch, con Session ID).
-IMPORTANTE: No uses la palabra "probabilidad", usa siempre "NIVEL DE SIGNIFICANCIA".
-
-TEST A/B (con Session ID):
-Control (A): {r['n_a']} sesiones | Media: {r['mean_a']:.4f}
-Variante (B): {r['n_b']} sesiones | Media: {r['mean_b']:.4f}
-Uplift relativo: {r['uplift_pct']:.2f}%
-Estadístico T (Welch): {r['t_stat']:.4f}
-P-value (dos colas): {r['p_value_two']:.4f}
-¿Resultado significativo (p < 0.05)? {sig}
-IC 95% uplift centrado: [{r['ci_relativo_centrado'][0]:.2f}%, {r['ci_relativo_centrado'][1]:.2f}%]
-
-Proporciona:
-1. CONCLUSIÓN EJECUTIVA (2-3 líneas)
-2. INTERPRETACIÓN DEL RESULTADO
-3. ACCIÓN RECOMENDADA
-"""
+    prompt = build_frequentist_ai_prompt(
+        resultados,
+        n_control_key="n_a",
+        n_variante_key="n_b",
+        conv_control_key="conv_a",
+        conv_variante_key="conv_b",
+        tasa_control_key="mean_a",
+        tasa_variante_key="mean_b",
+    )
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",

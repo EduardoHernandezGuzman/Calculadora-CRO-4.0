@@ -15,6 +15,8 @@ import seaborn as sns
 from scipy import stats
 from matplotlib.backends.backend_pdf import PdfPages
 
+from backend.core.frequentist_ai_prompt import build_frequentist_ai_prompt
+
 try:
     import streamlit as st
 except Exception:
@@ -190,31 +192,15 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
     if client is None:
         return ""
 
-    r = resultados
-    uplift = r["uplift_pct"]
-    p_two  = r["p_value_two"]
-    z      = r["z_stat"]
-    sig    = "sí" if p_two < 0.05 else "no"
-
-    prompt = f"""
-Eres un Director de CRO. Analiza estos resultados de un test A/B (z-test de proporciones).
-IMPORTANTE: No uses la palabra "probabilidad", usa siempre "NIVEL DE SIGNIFICANCIA".
-
-TEST A/B:
-Control (A): {r['n_g1']} sesiones | {r['conv_g1']} conversiones | Tasa: {r['tasa_g1']*100:.2f}%
-Variante (B): {r['n_g2']} sesiones | {r['conv_g2']} conversiones | Tasa: {r['tasa_g2']*100:.2f}%
-
-Uplift relativo B vs A: {uplift:.2f}%
-Estadístico Z: {z:.4f}
-P-value (dos colas): {p_two:.4f}
-¿Resultado significativo (p < 0.05)? {sig}
-IC 95% uplift centrado: [{r['ci_relativo_centrado'][0]:.2f}%, {r['ci_relativo_centrado'][1]:.2f}%]
-
-Proporciona:
-1. CONCLUSIÓN EJECUTIVA (2-3 líneas)
-2. INTERPRETACIÓN DEL RESULTADO
-3. ACCIÓN RECOMENDADA
-"""
+    prompt = build_frequentist_ai_prompt(
+        resultados,
+        n_control_key="n_g1",
+        n_variante_key="n_g2",
+        conv_control_key="conv_g1",
+        conv_variante_key="conv_g2",
+        tasa_control_key="tasa_g1",
+        tasa_variante_key="tasa_g2",
+    )
 
     try:
         response = client.chat.completions.create(
