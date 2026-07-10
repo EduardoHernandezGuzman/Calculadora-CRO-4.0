@@ -82,6 +82,11 @@ class AnalisisTTest:
         se_b = np.std(values_b, ddof=1) / np.sqrt(n_b) if n_b > 1 else 0.0
         se_diff = float(np.sqrt(se_a**2 + se_b**2))
 
+        se_control = float(np.sqrt(mean_a * (1 - mean_a) / n_a)) if n_a else 0.0
+        se_variante = float(np.sqrt(mean_b * (1 - mean_b) / n_b)) if n_b else 0.0
+        se_diferencia = float(np.sqrt(se_control**2 + se_variante**2))
+        z_score = float(diff / se_diferencia) if se_diferencia > 0 else 0.0
+
         # Grados de libertad de Welch-Satterthwaite
         if se_a > 0 and se_b > 0:
             df_w = (se_a**2 + se_b**2)**2 / (se_a**4 / (n_a - 1) + se_b**4 / (n_b - 1))
@@ -116,6 +121,10 @@ class AnalisisTTest:
             "diferencia":    float(diff),
             "uplift_pct":    float(uplift_pct),
             "t_stat":        t_stat,
+            "z_score":       z_score,
+            "se_control":    se_control,
+            "se_variante":   se_variante,
+            "se_diferencia": se_diferencia,
             "p_value_two":   float(p_two),
             "p_value_right": float(p_right),
             "p_value_left":  float(p_left),
@@ -277,6 +286,10 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         "media_B":               r["mean_b"],
         "uplift_%":              r["uplift_pct"],
         "z_stat":                r["t_stat"],   # alias para UI unificada
+        "z_score":               r["z_score"],
+        "se_control":            r["se_control"],
+        "se_variante":           r["se_variante"],
+        "se_diferencia":         r["se_diferencia"],
         "p_value_two":           r["p_value_two"],
         "p_value_right":         r["p_value_right"],
         "p_value_left":          r["p_value_left"],

@@ -70,7 +70,11 @@ class AnalisisProporciones:
         p_left  = float(stats.norm.cdf(z_stat))        # H1: B < A
 
         # Error estándar para IC (sin pooling)
-        se_ci = np.sqrt(p_a * (1 - p_a) / n_a + p_b * (1 - p_b) / n_b) if n_a > 0 and n_b > 0 else 0.0
+        se_control = float(np.sqrt(p_a * (1 - p_a) / n_a)) if n_a > 0 else 0.0
+        se_variante = float(np.sqrt(p_b * (1 - p_b) / n_b)) if n_b > 0 else 0.0
+        se_diferencia = float(np.sqrt(se_control**2 + se_variante**2))
+        z_score = float(diff / se_diferencia) if se_diferencia > 0 else 0.0
+        se_ci = se_diferencia
 
         # IC 95% dos colas (z = 1.96)
         ci_diff_low  = diff - 1.96 * se_ci
@@ -101,6 +105,10 @@ class AnalisisProporciones:
             "diferencia":  float(diff),
             "uplift_pct":  float(uplift_pct),
             "z_stat":      float(z_stat),
+            "z_score":     z_score,
+            "se_control":  se_control,
+            "se_variante": se_variante,
+            "se_diferencia": se_diferencia,
             "p_value_two":   float(p_two),
             "p_value_right": float(p_right),
             "p_value_left":  float(p_left),
@@ -275,6 +283,10 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         "tasa_B":               r["tasa_g2"],
         "uplift_%":             r["uplift_pct"],
         "z_stat":               r["z_stat"],
+        "z_score":              r["z_score"],
+        "se_control":           r["se_control"],
+        "se_variante":          r["se_variante"],
+        "se_diferencia":        r["se_diferencia"],
         "p_value_two":          r["p_value_two"],
         "p_value_right":        r["p_value_right"],
         "p_value_left":         r["p_value_left"],

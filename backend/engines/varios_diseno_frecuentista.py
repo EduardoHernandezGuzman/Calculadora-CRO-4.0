@@ -206,6 +206,16 @@ class AnalisisBootstrapAgregado:
         m_a_obs = conv_a / n_a if n_a != 0 else 0.0
         m_b_obs = conv_b / n_b if n_b != 0 else 0.0
 
+        se_control = float(np.sqrt(m_a_obs * (1 - m_a_obs) / n_a)) if n_a else 0.0
+        se_variante = float(np.sqrt(m_b_obs * (1 - m_b_obs) / n_b)) if n_b else 0.0
+        se_diferencia = float(np.sqrt(se_control**2 + se_variante**2))
+        z_score = float((m_b_obs - m_a_obs) / se_diferencia) if se_diferencia else 0.0
+        uplift_pct = (
+            float((m_b_obs - m_a_obs) / m_a_obs * 100)
+            if m_a_obs != 0
+            else 0.0
+        )
+
         # --- UPLIFT RELATIVO y sus INTERVALOS DE CONFIANZA ---
         # El uplift relativo = (diferencia / tasa de A) * 100
         # Nos dice el % de mejora (o empeoramiento) respecto a A.
@@ -243,6 +253,11 @@ class AnalisisBootstrapAgregado:
             "conv_g2": int(conv_b),
             "media_real_g1": float(m_a_obs),
             "media_real_g2": float(m_b_obs),
+            "uplift_%": uplift_pct,
+            "se_control": se_control,
+            "se_variante": se_variante,
+            "se_diferencia": se_diferencia,
+            "z_score": z_score,
             "precision_b_mejor": precision_b_mejor,
             "ci_diferencia": (ci_low, ci_high),
             "ci_relativo_centrado": (
@@ -404,12 +419,6 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
 
     # === ARMAMOS EL RESUMEN FINAL ===
     r = analisis.resultados
-    uplift_pct = (
-        ((r["media_real_g2"] - r["media_real_g1"]) / r["media_real_g1"] * 100)
-        if r["media_real_g1"] != 0
-        else 0.0
-    )
-
     summary = pd.DataFrame(
         [
             {
@@ -419,7 +428,11 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                 "conv_B": r["conv_g2"],
                 "tasa_A": r["media_real_g1"],
                 "tasa_B": r["media_real_g2"],
-                "uplift_%": uplift_pct,
+                "uplift_%": r["uplift_%"],
+                "se_control": r["se_control"],
+                "se_variante": r["se_variante"],
+                "se_diferencia": r["se_diferencia"],
+                "z_score": r["z_score"],
                 "precision_B_mejor": r["precision_b_mejor"],
                 "ci_diff_low": r["ci_diferencia"][0],
                 "ci_diff_high": r["ci_diferencia"][1],

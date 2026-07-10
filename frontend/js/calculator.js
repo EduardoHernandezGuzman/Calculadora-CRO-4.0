@@ -698,6 +698,15 @@ function renderFreqConsoleBlocks(out) {
     const z = parseFloat(r.z_stat || 0).toFixed(4);
     const statLabel = window.State.session_id ? 'ESTADÍSTICO T (Welch)' : 'ESTADÍSTICO Z';
     lines.push(statLabel + ': ' + z);
+
+    const interpretationMetrics = [r.z_score, r.se_control, r.se_variante, r.se_diferencia];
+    if (interpretationMetrics.every(value => Number.isFinite(parseFloat(value)))) {
+      lines.push('Z-SCORE (no combinado): ' + parseFloat(r.z_score).toFixed(4));
+      lines.push('ERROR ESTÁNDAR CONTROL: ' + parseFloat(r.se_control).toFixed(4));
+      lines.push('ERROR ESTÁNDAR VARIANTE: ' + parseFloat(r.se_variante).toFixed(4));
+      lines.push('ERROR ESTÁNDAR DIFERENCIA: ' + parseFloat(r.se_diferencia).toFixed(4));
+    }
+
     if (intervalType === 'centrado') {
       const pv = parseFloat(r.p_value_two !== undefined ? r.p_value_two : 1).toFixed(4);
       lines.push('P-VALUE (dos colas): ' + pv);

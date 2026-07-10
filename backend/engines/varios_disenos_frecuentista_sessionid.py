@@ -166,6 +166,16 @@ class AnalisisBootstrap:
         m1_obs = float(np.mean(data1))
         m2_obs = float(np.mean(data2))
 
+        se_control = float(np.sqrt(m1_obs * (1 - m1_obs) / n_g1)) if n_g1 else 0.0
+        se_variante = float(np.sqrt(m2_obs * (1 - m2_obs) / n_g2)) if n_g2 else 0.0
+        se_diferencia = float(np.sqrt(se_control**2 + se_variante**2))
+        z_score = float((m2_obs - m1_obs) / se_diferencia) if se_diferencia else 0.0
+        uplift_pct = (
+            float((m2_obs - m1_obs) / m1_obs * 100)
+            if m1_obs != 0
+            else 0.0
+        )
+
         if m1_obs != 0:
             uplift_rel = (diferencias_ba / m1_obs) * 100
             ci_rel_centrado = np.percentile(uplift_rel, [2.5, 97.5]).astype(float)
@@ -194,6 +204,11 @@ class AnalisisBootstrap:
             "conv_g2": conv_g2,
             "media_real_g1": m1_obs,
             "media_real_g2": m2_obs,
+            "uplift_%": uplift_pct,
+            "se_control": se_control,
+            "se_variante": se_variante,
+            "se_diferencia": se_diferencia,
+            "z_score": z_score,
             "precision_b_mejor": precision_b_mejor,
             "ci_diferencia": (ci_low, ci_high),
             "ci_relativo_centrado": (float(ci_rel_centrado[0]), float(ci_rel_centrado[1])),
@@ -308,8 +323,6 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         figs = analisis.generar_reporte(pdf=None)
 
     r = analisis.resultados
-    uplift_pct = ((r["media_real_g2"] - r["media_real_g1"]) / r["media_real_g1"]) * 100 if r["media_real_g1"] else 0.0
-
     summary = pd.DataFrame(
         [
             {
@@ -321,7 +334,11 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                 "conv_B": float(r["conv_g2"]),
                 "media_A": float(r["media_real_g1"]),
                 "media_B": float(r["media_real_g2"]),
-                "uplift_%": float(uplift_pct),
+                "uplift_%": float(r["uplift_%"]),
+                "se_control": float(r["se_control"]),
+                "se_variante": float(r["se_variante"]),
+                "se_diferencia": float(r["se_diferencia"]),
+                "z_score": float(r["z_score"]),
                 "precision_B_mejor": float(r["precision_b_mejor"]),
                 "ci_diff_low": float(r["ci_diferencia"][0]),
                 "ci_diff_high": float(r["ci_diferencia"][1]),
