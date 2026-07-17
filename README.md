@@ -217,6 +217,9 @@ Opciones principales de `config`:
 | `num_samples` | Número de muestras para motores bayesianos |
 | `n_iteraciones` | Número de iteraciones para Bootstrap |
 | `freq_interval_type` | Contraste frecuentista: `centrado`, `derecha` o `izquierda` |
+| `session_id` | Indica si el CSV utiliza el formato por sesión |
+
+`session_id` debe coincidir con el motor seleccionado y con las columnas del CSV. Si no se envía, se infiere a partir del motor para mantener la compatibilidad con clientes anteriores. Una contradicción entre configuración, motor y formato de datos devuelve un error `400` claro y no ejecuta el análisis.
 
 La respuesta puede incluir `summary`, `figures`, `pdf_bytes`, `log_text`, `comparisons` y `srm`.
 
