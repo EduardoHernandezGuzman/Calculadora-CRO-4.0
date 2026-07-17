@@ -18,6 +18,12 @@ from scipy import stats
 from matplotlib.backends.backend_pdf import PdfPages
 
 from backend.core.frequentist_ai_prompt import build_frequentist_ai_prompt
+from backend.core.experiment_groups import (
+    STATUS_WINNER,
+    detect_session_groups,
+    make_comparison_record,
+    mark_best_comparison,
+)
 
 try:
     import streamlit as st
@@ -195,7 +201,7 @@ class AnalisisTTest:
         return figs
 
 
-def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+def interpretar_resultados_con_ia(resultados: Any, api_key: Optional[str] = None) -> str:
     client = _safe_openai_client(api_key=api_key)
     if client is None:
         return ""
@@ -208,6 +214,7 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
         conv_variante_key="conv_b",
         tasa_control_key="mean_a",
         tasa_variante_key="mean_b",
+        variant_key="variant",
     )
     try:
         response = client.chat.completions.create(
@@ -221,25 +228,112 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
         return ""
 
 
+def _build_comparisons(
+    results: List[Dict[str, Any]], interval_type: str
+) -> List[Dict[str, Any]]:
+    comparisons = []
+    for r in results:
+        difference = float(r["diferencia"])
+        direction = "positive" if difference > 0 else "negative" if difference < 0 else "neutral"
+        if interval_type == "derecha":
+            p_value = float(r["p_value_right"])
+            favorable = difference > 0
+            interval = [float(r["ci_relativo_derecha_izq"]), None]
+            interval_name = "right_95"
+        elif interval_type == "izquierda":
+            p_value = float(r["p_value_left"])
+            favorable = difference < 0
+            interval = [None, float(r["ci_relativo_izquierda_der"])]
+            interval_name = "left_95"
+        else:
+            p_value = float(r["p_value_two"])
+            favorable = difference > 0
+            interval = [
+                float(r["ci_relativo_centrado"][0]),
+                float(r["ci_relativo_centrado"][1]),
+            ]
+            interval_name = "centered_95"
+
+        comparisons.append(
+            make_comparison_record(
+                variant=r["variant"],
+                control_value=float(r["mean_a"]),
+                variant_value=float(r["mean_b"]),
+                uplift_pct=float(r["uplift_pct"]),
+                difference=difference,
+                evidence_name="p_value",
+                evidence_value=p_value,
+                interval_name=interval_name,
+                interval=interval,
+                favorable=favorable,
+                significant=p_value < 0.05,
+                metrics={
+                    "direction": direction,
+                    "t_stat": float(r["t_stat"]),
+                    "z_score": float(r["z_score"]),
+                    "se_control": float(r["se_control"]),
+                    "se_variante": float(r["se_variante"]),
+                    "se_diferencia": float(r["se_diferencia"]),
+                    "p_value_two": float(r["p_value_two"]),
+                    "p_value_right": float(r["p_value_right"]),
+                    "p_value_left": float(r["p_value_left"]),
+                    "ci_diff": [float(r["ci_diff_low"]), float(r["ci_diff_high"])],
+                    "ci_centered_pct": list(r["ci_relativo_centrado"]),
+                    "ci_right_floor_pct": float(r["ci_relativo_derecha_izq"]),
+                    "ci_left_ceiling_pct": float(r["ci_relativo_izquierda_der"]),
+                },
+            )
+        )
+
+    winners = [item for item in comparisons if item["comparison_status"] == STATUS_WINNER]
+    candidates = winners or [item for item in comparisons if item["favorable"]]
+    if not candidates:
+        return mark_best_comparison(comparisons, None, winner=False)
+    best = min(candidates, key=lambda item: item["evidence"]["value"])
+    return mark_best_comparison(comparisons, best["variant"], winner=bool(winners))
+
+
+def _summary_row(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "control": "A", "variant": r["variant"],
+        "grupo_A_col": "A", "grupo_B_col": r["variant"],
+        "n_A": r["n_a"], "n_B": r["n_b"],
+        "conv_A": r["conv_a"], "conv_B": r["conv_b"],
+        "media_A": r["mean_a"], "media_B": r["mean_b"],
+        "uplift_%": r["uplift_pct"], "z_stat": r["t_stat"],
+        "z_score": r["z_score"], "se_control": r["se_control"],
+        "se_variante": r["se_variante"], "se_diferencia": r["se_diferencia"],
+        "p_value_two": r["p_value_two"], "p_value_right": r["p_value_right"],
+        "p_value_left": r["p_value_left"],
+        "ci_diff_low": r["ci_diff_low"], "ci_diff_high": r["ci_diff_high"],
+        "ci_uplift_center_low": r["ci_relativo_centrado"][0],
+        "ci_uplift_center_high": r["ci_relativo_centrado"][1],
+        "ci_right_95_left": r["ci_relativo_derecha_izq"],
+        "ci_left_95_right": r["ci_relativo_izquierda_der"],
+    }
+
+
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     config = config or {}
     generate_pdf   = bool(config.get("generate_pdf", False))
     include_ai     = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
+    interval_type = str(config.get("freq_interval_type", "centrado"))
+    layout = detect_session_groups(df.columns)
+    values_a = df[layout.value_columns["A"]].dropna().values.astype(float)
+    analyses = []
+    for variant in layout.variants:
+        analysis = AnalisisTTest()
+        analysis.analizar(
+            values_a,
+            df[layout.value_columns[variant]].dropna().values.astype(float),
+            col_a="A",
+            col_b=variant,
+        )
+        analysis.resultados["variant"] = variant
+        analysis.imprimir_consola()
+        analyses.append(analysis)
 
-    cols = list(df.columns[:2])
-    if len(cols) < 2:
-        raise ValueError("El CSV debe tener al menos dos columnas (A y B).")
-
-    col_a, col_b = cols[0], cols[1]
-    values_a = df[col_a].dropna().values.astype(float)
-    values_b = df[col_b].dropna().values.astype(float)
-
-    analisis = AnalisisTTest()
-    analisis.analizar(values_a, values_b, col_a=col_a, col_b=col_b)
-    analisis.imprimir_consola()
-
-    r = analisis.resultados
     figures: List[Any] = []
     pdf_bytes: Optional[bytes] = None
     log_text: Optional[str] = None
@@ -248,9 +342,12 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         import io as _io
         buf = _io.BytesIO()
         with PdfPages(buf) as pdf:
-            figures = analisis.generar_figuras(pdf=pdf)
+            for analysis in analyses:
+                figures.extend(analysis.generar_figuras(pdf=pdf))
             if include_ai:
-                texto_ia = interpretar_resultados_con_ia(r, api_key=openai_api_key)
+                texto_ia = interpretar_resultados_con_ia(
+                    [analysis.resultados for analysis in analyses], api_key=openai_api_key
+                )
                 if texto_ia:
                     fig_ia = plt.figure(figsize=(8.27, 11.69))
                     fig_ia.text(0.1, 0.95, "Interpretación IA", fontsize=16, fontweight="bold", va="top")
@@ -261,41 +358,21 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         buf.seek(0)
         pdf_bytes = buf.read()
     else:
-        figures = analisis.generar_figuras()
+        for analysis in analyses:
+            figures.extend(analysis.generar_figuras())
         if include_ai:
-            log_text = interpretar_resultados_con_ia(r, api_key=openai_api_key)
+            log_text = interpretar_resultados_con_ia(
+                [analysis.resultados for analysis in analyses], api_key=openai_api_key
+            )
 
-    # El campo t_stat sirve como z_stat en el frontend (mismo nombre en la UI)
-    summary = pd.DataFrame([{
-        "grupo_A_col":           col_a,
-        "grupo_B_col":           col_b,
-        "n_A":                   r["n_a"],
-        "n_B":                   r["n_b"],
-        "conv_A":                r["conv_a"],
-        "conv_B":                r["conv_b"],
-        "media_A":               r["mean_a"],
-        "media_B":               r["mean_b"],
-        "uplift_%":              r["uplift_pct"],
-        "z_stat":                r["t_stat"],   # alias para UI unificada
-        "z_score":               r["z_score"],
-        "se_control":            r["se_control"],
-        "se_variante":           r["se_variante"],
-        "se_diferencia":         r["se_diferencia"],
-        "p_value_two":           r["p_value_two"],
-        "p_value_right":         r["p_value_right"],
-        "p_value_left":          r["p_value_left"],
-        "ci_diff_low":           r["ci_diff_low"],
-        "ci_diff_high":          r["ci_diff_high"],
-        "ci_uplift_center_low":  r["ci_relativo_centrado"][0],
-        "ci_uplift_center_high": r["ci_relativo_centrado"][1],
-        "ci_right_95_left":      r["ci_relativo_derecha_izq"],
-        "ci_left_95_right":      r["ci_relativo_izquierda_der"],
-    }])
+    results = [analysis.resultados for analysis in analyses]
+    summary = pd.DataFrame([_summary_row(result) for result in results])
+    comparisons = _build_comparisons(results, interval_type)
 
     return {
         "summary":    summary,
         "figures":    figures,
         "pdf_bytes":  pdf_bytes,
         "log_text":   log_text,
-        "comparisons": None,
+        "comparisons": comparisons,
     }

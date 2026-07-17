@@ -16,6 +16,12 @@ from scipy import stats
 from matplotlib.backends.backend_pdf import PdfPages
 
 from backend.core.frequentist_ai_prompt import build_frequentist_ai_prompt
+from backend.core.experiment_groups import (
+    STATUS_WINNER,
+    detect_aggregate_groups,
+    make_comparison_record,
+    mark_best_comparison,
+)
 
 try:
     import streamlit as st
@@ -56,7 +62,9 @@ class AnalisisProporciones:
     def __init__(self):
         self.resultados: Dict[str, Any] = {}
 
-    def analizar(self, n_a: int, conv_a: int, n_b: int, conv_b: int) -> None:
+    def analizar(
+        self, n_a: int, conv_a: int, n_b: int, conv_b: int, variant: str = "B"
+    ) -> None:
         p_a = conv_a / n_a if n_a > 0 else 0.0
         p_b = conv_b / n_b if n_b > 0 else 0.0
         diff = p_b - p_a
@@ -98,6 +106,8 @@ class AnalisisProporciones:
             ci_right_95_left = ci_left_95_right = 0.0
 
         self.resultados = {
+            "control": "A",
+            "variant": variant,
             "n_g1":    int(n_a),
             "n_g2":    int(n_b),
             "conv_g1": int(conv_a),
@@ -123,11 +133,12 @@ class AnalisisProporciones:
 
     def imprimir_consola(self) -> None:
         r = self.resultados
+        variant = r["variant"]
         print("=" * 50)
         print("  ANÁLISIS DE PROPORCIONES (Z-TEST)  ".center(50))
         print("=" * 50)
         print(f"{'Diseño A':<20} | Visitas: {r['n_g1']:>8} | Convs: {int(r['conv_g1']):>6}")
-        print(f"{'Diseño B':<20} | Visitas: {r['n_g2']:>8} | Convs: {int(r['conv_g2']):>6}")
+        print(f"{f'Diseño {variant}':<20} | Visitas: {r['n_g2']:>8} | Convs: {int(r['conv_g2']):>6}")
         print("-" * 50)
         print(f"ESTADÍSTICO Z:          {r['z_stat']:.4f}")
         print(f"P-VALUE (dos colas):    {r['p_value_two']:.4f}")
@@ -142,6 +153,7 @@ class AnalisisProporciones:
 
     def generar_figuras(self, pdf: Optional[PdfPages] = None) -> List[Any]:
         r = self.resultados
+        variant = r["variant"]
         p_a = r["tasa_g1"]
         p_b = r["tasa_g2"]
         diff = r["diferencia"]
@@ -150,7 +162,7 @@ class AnalisisProporciones:
 
         # --- Figura 1: tasas de conversión ---
         fig1, ax = plt.subplots(figsize=(8, 5))
-        bars = ax.bar(["A (Control)", "B (Variante)"], [p_a * 100, p_b * 100],
+        bars = ax.bar(["A (Control)", f"{variant} (Variante)"], [p_a * 100, p_b * 100],
                       color=["#6366f1", "#06b6d4"], width=0.45)
         for bar, val in zip(bars, [p_a, p_b]):
             ax.text(bar.get_x() + bar.get_width() / 2,
@@ -173,7 +185,7 @@ class AnalisisProporciones:
                      fmt="o", color="#6366f1", capsize=12, capthick=2, markersize=10)
         ax2.axhline(0, color="red", linestyle="--", label="Sin diferencia (H₀)")
         ax2.set_xticks([])
-        ax2.set_ylabel("Diferencia de conversión B − A (%)")
+        ax2.set_ylabel(f"Diferencia de conversión {variant} − A (%)")
         sig_label = "✓ Significativo" if r["p_value_two"] < 0.05 else "✗ No significativo"
         ax2.set_title(
             f"IC 95% diferencia  |  z = {r['z_stat']:.3f}  |  p = {r['p_value_two']:.4f}  |  {sig_label}"
@@ -187,7 +199,7 @@ class AnalisisProporciones:
         return figs
 
 
-def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+def interpretar_resultados_con_ia(resultados: Any, api_key: Optional[str] = None) -> str:
     client = _safe_openai_client(api_key=api_key)
     if client is None:
         return ""
@@ -200,6 +212,7 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
         conv_variante_key="conv_g2",
         tasa_control_key="tasa_g1",
         tasa_variante_key="tasa_g2",
+        variant_key="variant",
     )
 
     try:
@@ -214,27 +227,112 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
         return ""
 
 
+def _build_comparisons(
+    results: List[Dict[str, Any]], interval_type: str
+) -> List[Dict[str, Any]]:
+    comparisons = []
+    for r in results:
+        difference = float(r["diferencia"])
+        direction = "positive" if difference > 0 else "negative" if difference < 0 else "neutral"
+        if interval_type == "derecha":
+            p_value = float(r["p_value_right"])
+            favorable = difference > 0
+            interval = [float(r["ci_relativo_derecha_izq"]), None]
+            interval_name = "right_95"
+        elif interval_type == "izquierda":
+            p_value = float(r["p_value_left"])
+            favorable = difference < 0
+            interval = [None, float(r["ci_relativo_izquierda_der"])]
+            interval_name = "left_95"
+        else:
+            p_value = float(r["p_value_two"])
+            favorable = difference > 0
+            interval = [
+                float(r["ci_relativo_centrado"][0]),
+                float(r["ci_relativo_centrado"][1]),
+            ]
+            interval_name = "centered_95"
+
+        comparisons.append(
+            make_comparison_record(
+                variant=r["variant"],
+                control_value=float(r["tasa_g1"]),
+                variant_value=float(r["tasa_g2"]),
+                uplift_pct=float(r["uplift_pct"]),
+                difference=difference,
+                evidence_name="p_value",
+                evidence_value=p_value,
+                interval_name=interval_name,
+                interval=interval,
+                favorable=favorable,
+                significant=p_value < 0.05,
+                metrics={
+                    "direction": direction,
+                    "z_stat": float(r["z_stat"]),
+                    "z_score": float(r["z_score"]),
+                    "se_control": float(r["se_control"]),
+                    "se_variante": float(r["se_variante"]),
+                    "se_diferencia": float(r["se_diferencia"]),
+                    "p_value_two": float(r["p_value_two"]),
+                    "p_value_right": float(r["p_value_right"]),
+                    "p_value_left": float(r["p_value_left"]),
+                    "ci_diff": [float(r["ci_diff_low"]), float(r["ci_diff_high"])],
+                    "ci_centered_pct": list(r["ci_relativo_centrado"]),
+                    "ci_right_floor_pct": float(r["ci_relativo_derecha_izq"]),
+                    "ci_left_ceiling_pct": float(r["ci_relativo_izquierda_der"]),
+                },
+            )
+        )
+
+    winners = [item for item in comparisons if item["comparison_status"] == STATUS_WINNER]
+    candidates = winners or [item for item in comparisons if item["favorable"]]
+    if not candidates:
+        return mark_best_comparison(comparisons, None, winner=False)
+    best = min(candidates, key=lambda item: item["evidence"]["value"])
+    return mark_best_comparison(comparisons, best["variant"], winner=bool(winners))
+
+
+def _summary_row(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "control": "A", "variant": r["variant"],
+        "n_visitas_A": r["n_g1"], "n_visitas_B": r["n_g2"],
+        "conv_A": r["conv_g1"], "conv_B": r["conv_g2"],
+        "tasa_A": r["tasa_g1"], "tasa_B": r["tasa_g2"],
+        "uplift_%": r["uplift_pct"], "z_stat": r["z_stat"], "z_score": r["z_score"],
+        "se_control": r["se_control"], "se_variante": r["se_variante"],
+        "se_diferencia": r["se_diferencia"],
+        "p_value_two": r["p_value_two"], "p_value_right": r["p_value_right"],
+        "p_value_left": r["p_value_left"],
+        "ci_diff_low": r["ci_diff_low"], "ci_diff_high": r["ci_diff_high"],
+        "ci_uplift_center_low": r["ci_relativo_centrado"][0],
+        "ci_uplift_center_high": r["ci_relativo_centrado"][1],
+        "ci_right_95_left": r["ci_relativo_derecha_izq"],
+        "ci_left_95_right": r["ci_relativo_izquierda_der"],
+    }
+
+
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     config = config or {}
     generate_pdf    = bool(config.get("generate_pdf", False))
     include_ai      = bool(config.get("include_ai", False))
     openai_api_key  = config.get("openai_api_key", "")
+    interval_type = str(config.get("freq_interval_type", "centrado"))
+    layout = detect_aggregate_groups(df.columns)
+    n_a = int(df[layout.visit_columns["A"]].sum())
+    conv_a = int(df[layout.value_columns["A"]].sum())
+    analyses = []
+    for variant in layout.variants:
+        analysis = AnalisisProporciones()
+        analysis.analizar(
+            n_a,
+            conv_a,
+            int(df[layout.visit_columns[variant]].sum()),
+            int(df[layout.value_columns[variant]].sum()),
+            variant=variant,
+        )
+        analysis.imprimir_consola()
+        analyses.append(analysis)
 
-    required = ["Visitas A", "Visitas B", "Conversiones A", "Conversiones B"]
-    missing  = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Faltan columnas obligatorias en el CSV: {missing}")
-
-    n_a    = int(df["Visitas A"].sum())
-    n_b    = int(df["Visitas B"].sum())
-    conv_a = int(df["Conversiones A"].sum())
-    conv_b = int(df["Conversiones B"].sum())
-
-    analisis = AnalisisProporciones()
-    analisis.analizar(n_a, conv_a, n_b, conv_b)
-    analisis.imprimir_consola()
-
-    r = analisis.resultados
     figures: List[Any] = []
     pdf_bytes: Optional[bytes] = None
     log_text: Optional[str] = None
@@ -243,9 +341,12 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         import io as _io
         buf = _io.BytesIO()
         with PdfPages(buf) as pdf:
-            figures = analisis.generar_figuras(pdf=pdf)
+            for analysis in analyses:
+                figures.extend(analysis.generar_figuras(pdf=pdf))
             if include_ai:
-                texto_ia = interpretar_resultados_con_ia(r, api_key=openai_api_key)
+                texto_ia = interpretar_resultados_con_ia(
+                    [analysis.resultados for analysis in analyses], api_key=openai_api_key
+                )
                 if texto_ia:
                     fig_ia = plt.figure(figsize=(8.27, 11.69))
                     fig_ia.text(0.1, 0.95, "Interpretación IA", fontsize=16, fontweight="bold", va="top")
@@ -256,38 +357,21 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         buf.seek(0)
         pdf_bytes = buf.read()
     else:
-        figures = analisis.generar_figuras()
+        for analysis in analyses:
+            figures.extend(analysis.generar_figuras())
         if include_ai:
-            log_text = interpretar_resultados_con_ia(r, api_key=openai_api_key)
+            log_text = interpretar_resultados_con_ia(
+                [analysis.resultados for analysis in analyses], api_key=openai_api_key
+            )
 
-    summary = pd.DataFrame([{
-        "n_visitas_A":          r["n_g1"],
-        "n_visitas_B":          r["n_g2"],
-        "conv_A":               r["conv_g1"],
-        "conv_B":               r["conv_g2"],
-        "tasa_A":               r["tasa_g1"],
-        "tasa_B":               r["tasa_g2"],
-        "uplift_%":             r["uplift_pct"],
-        "z_stat":               r["z_stat"],
-        "z_score":              r["z_score"],
-        "se_control":           r["se_control"],
-        "se_variante":          r["se_variante"],
-        "se_diferencia":        r["se_diferencia"],
-        "p_value_two":          r["p_value_two"],
-        "p_value_right":        r["p_value_right"],
-        "p_value_left":         r["p_value_left"],
-        "ci_diff_low":          r["ci_diff_low"],
-        "ci_diff_high":         r["ci_diff_high"],
-        "ci_uplift_center_low":  r["ci_relativo_centrado"][0],
-        "ci_uplift_center_high": r["ci_relativo_centrado"][1],
-        "ci_right_95_left":     r["ci_relativo_derecha_izq"],
-        "ci_left_95_right":     r["ci_relativo_izquierda_der"],
-    }])
+    results = [analysis.resultados for analysis in analyses]
+    summary = pd.DataFrame([_summary_row(result) for result in results])
+    comparisons = _build_comparisons(results, interval_type)
 
     return {
         "summary":   summary,
         "figures":   figures,
         "pdf_bytes": pdf_bytes,
         "log_text":  log_text,
-        "comparisons": None,
+        "comparisons": comparisons,
     }

@@ -1,6 +1,8 @@
 # Calculadora CRO 4.0 - A/B Testing
 
-Aplicación web para analizar experimentos A/B orientados a CRO (Conversion Rate Optimization) mediante modelos bayesianos y frecuentistas. Incluye un asistente para configurar el análisis, carga de CSV, entrada manual para modelos frecuentistas, gráficos, interpretación opcional con IA y exportación a PDF.
+Aplicación web para analizar experimentos con un control A y hasta cuatro variantes B, C, D y E. Utiliza modelos bayesianos y frecuentistas orientados a CRO (Conversion Rate Optimization) e incluye carga de CSV, entrada manual, gráficos, interpretación opcional con IA y exportación a PDF.
+
+Todas las comparaciones se realizan exclusivamente contra el control: A vs B, A vs C, A vs D y A vs E. No se calculan comparaciones entre variantes.
 
 ## Motores disponibles
 
@@ -72,37 +74,96 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 El formato depende de la unidad de análisis seleccionada. Los nombres de las columnas distinguen mayúsculas, espacios y tildes.
 
+- A es siempre el control y es obligatorio.
+- Debe existir al menos una variante.
+- B, C, D y E son opcionales; solo se incluyen las variantes disponibles.
+- Se admiten experimentos A/B, A/B/C, A/B/C/D y A/B/C/D/E.
+
 ### Datos agregados, sin Session ID
 
-Los modelos agregados esperan una fila por día con estas columnas:
+Cada grupo utilizado necesita las columnas `Visitas X` y `Conversiones X`. Las variantes no utilizadas no deben incluirse.
+
+Ejemplo A/B:
 
 ```csv
-Día,Visitas A,Visitas B,Conversiones A,Conversiones B
-1,100,95,5,8
-2,110,105,6,7
+Día,Visitas A,Conversiones A,Visitas B,Conversiones B
+1,100,5,95,8
+2,110,6,105,7
 ```
 
-Los motores frecuentistas también permiten introducir manualmente los totales de usuarios o sesiones y conversiones desde la interfaz.
+Ejemplo A/B/C:
+
+```csv
+Día,Visitas A,Conversiones A,Visitas B,Conversiones B,Visitas C,Conversiones C
+1,100,20,100,24,100,18
+```
+
+Ejemplo A/B/C/D/E:
+
+```csv
+Día,Visitas A,Conversiones A,Visitas B,Conversiones B,Visitas C,Conversiones C,Visitas D,Conversiones D,Visitas E,Conversiones E
+1,1000,200,1000,230,1000,180,1000,250,1000,210
+```
 
 ### Datos por sesión
 
-Los motores bayesianos con Session ID esperan `Día` y una columna `Conversiones X` por variante. Cada fila representa una sesión; los valores son `0/1` para conversiones únicas o un conteo para conversiones múltiples.
+El formato recomendado para todos los motores con Session ID utiliza `Día`, `SessionID` y una columna `Conversiones X` por grupo. Cada fila pertenece a un único grupo; las columnas de los demás grupos deben estar vacías o contener `NaN`.
 
 ```csv
-Día,Conversiones A,Conversiones B
-1,0,
-1,1,
-1,,0
-1,,1
+Día,SessionID,Conversiones A,Conversiones B,Conversiones C
+1,A-001,1,,
+1,A-002,0,,
+1,B-001,,1,
+1,B-002,,0,
+1,C-001,,,1
 ```
 
-Los motores frecuentistas con Session ID trabajan con las dos primeras columnas del CSV como muestras A y B. Admiten valores binarios o continuos y celdas vacías cuando las muestras tienen distinta longitud.
+Los motores frecuentistas con Session ID conservan compatibilidad con el formato heredado `A,B`, pero no debe mezclarse con el formato canónico `Conversiones A...E`.
 
-```csv
-A,B
-0,1
-1,0
-0,
+### Entrada manual
+
+La entrada manual está disponible en los ocho motores y utiliza el mismo contrato que un CSV:
+
+- A es obligatorio.
+- B-E son opcionales y las variantes vacías no se envían.
+- Sin Session ID se genera internamente una fila agregada con visitas y conversiones.
+- Con Session ID se generan `Día`, `SessionID` y las columnas canónicas `Conversiones X`.
+
+En conversiones únicas `[0,1]`, las conversiones no pueden superar las visitas o sesiones. En conversiones múltiples `[0,∞]`, una sesión puede registrar más de una conversión y el total puede superar el número de visitas.
+
+## Interpretación de resultados
+
+La interfaz muestra una tarjeta por comparación A vs variante y destaca como máximo una:
+
+- **Ganadora**: la comparación seleccionada cumple todos los criterios estadísticos vigentes del motor.
+- **Mejor candidata**: es la comparación favorable con mayor evidencia, pero todavía no cumple todos los criterios de ganadora.
+- **Sin ganador concluyente**: no existe una variante que cumpla los criterios necesarios.
+
+Una comparación puede ser individualmente concluyente sin recibir el destacado principal cuando otra variante tiene mayor evidencia.
+
+### Comparaciones múltiples
+
+La calculadora no aplica Bonferroni, Holm, FDR ni otra corrección por comparaciones múltiples. Cada A vs variante reutiliza exactamente el cálculo A/B original para conservar la compatibilidad histórica.
+
+Al analizar varias variantes aumenta el riesgo global de falsos positivos. Los resultados deben interpretarse teniendo en cuenta el número de comparaciones y el coste de una decisión incorrecta.
+
+## Archivos de ejemplo
+
+- `examples/bayes_sin_session_abc.csv`
+- `examples/bayes_con_session_abc.csv`
+- `examples/frecuentista_sin_session_abcde.csv`
+- `examples/frecuentista_con_session_abc.csv`
+
+Todos contienen datos sintéticos y pueden cargarse directamente desde la interfaz.
+
+## Pruebas
+
+La batería no requiere dependencias adicionales:
+
+```bash
+MPLBACKEND=Agg venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+node --check frontend/js/calculator.js
+node tests/frontend_smoke.js
 ```
 
 ## Interpretación con IA

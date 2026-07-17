@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def build_frequentist_ai_prompt(
-    resultados: Dict[str, Any],
+    resultados: Any,
     *,
     n_control_key: str,
     n_variante_key: str,
@@ -12,8 +12,73 @@ def build_frequentist_ai_prompt(
     conv_variante_key: str,
     tasa_control_key: str,
     tasa_variante_key: str,
+    variant_key: str,
 ) -> str:
-    nivel_significancia = (1 - resultados["p_value_two"]) * 100
+    comparison_results: List[Dict[str, Any]] = (
+        resultados if isinstance(resultados, list) else [resultados]
+    )
+    data_blocks = []
+    for comparison in comparison_results:
+        variant = comparison.get(variant_key, "B")
+        nivel_significancia = (1 - comparison["p_value_two"]) * 100
+        data_blocks.append(
+            f"""DATOS DEL TEST
+
+Grupo Control (A)
+
+Visitas acumuladas: {comparison[n_control_key]}
+Conversiones acumuladas: {comparison[conv_control_key]}
+Tasa de conversión: {comparison[tasa_control_key]:.4f}
+
+Grupo Variante ({variant})
+
+Visitas acumuladas: {comparison[n_variante_key]}
+Conversiones acumuladas: {comparison[conv_variante_key]}
+Tasa de conversión: {comparison[tasa_variante_key]:.4f}
+
+RESULTADOS PRINCIPALES
+
+Control (A)
+
+Tasa de conversión: {comparison[tasa_control_key]:.4f}
+
+Variante ({variant})
+
+Tasa de conversión: {comparison[tasa_variante_key]:.4f}
+
+Uplift estimado:
+
+{comparison['uplift_pct']:.2f}%
+
+Nivel de significancia:
+
+{nivel_significancia:.2f}%
+
+Z-Score:
+
+{comparison['z_score']:.3f}
+
+Error estándar del control:
+
+{comparison['se_control']:.6f}
+
+Error estándar de la variante:
+
+{comparison['se_variante']:.6f}
+
+Error estándar de la diferencia:
+
+{comparison['se_diferencia']:.6f}
+
+INTERVALO DE CONFIANZA DEL UPLIFT RELATIVO (95%)
+
+Intervalo principal: [{comparison['ci_relativo_centrado'][0]:.2f}%, {comparison['ci_relativo_centrado'][1]:.2f}%]
+
+Escenario conservador: > {comparison['ci_relativo_derecha_izq']:.2f}%
+
+Escenario optimista: < {comparison['ci_relativo_izquierda_der']:.2f}%"""
+        )
+    comparison_data = "\n\n".join(data_blocks)
 
     return f"""
 Eres Director de CRO (Conversion Rate Optimization) especializado en experimentación y toma de decisiones basada en datos.
@@ -30,61 +95,7 @@ Usa siempre la expresión "NIVEL DE SIGNIFICANCIA".
 Explica brevemente el significado práctico de las métricas estadísticas cuando aporten contexto para la decisión.
 Prioriza la toma de decisiones y la gestión del riesgo frente al detalle técnico.
 
-DATOS DEL TEST
-
-Grupo Control (A)
-
-Visitas acumuladas: {resultados[n_control_key]}
-Conversiones acumuladas: {resultados[conv_control_key]}
-Tasa de conversión: {resultados[tasa_control_key]:.4f}
-
-Grupo Variante (B)
-
-Visitas acumuladas: {resultados[n_variante_key]}
-Conversiones acumuladas: {resultados[conv_variante_key]}
-Tasa de conversión: {resultados[tasa_variante_key]:.4f}
-
-RESULTADOS PRINCIPALES
-
-Control (A)
-
-Tasa de conversión: {resultados[tasa_control_key]:.4f}
-
-Variante (B)
-
-Tasa de conversión: {resultados[tasa_variante_key]:.4f}
-
-Uplift estimado:
-
-{resultados['uplift_pct']:.2f}%
-
-Nivel de significancia:
-
-{nivel_significancia:.2f}%
-
-Z-Score:
-
-{resultados['z_score']:.3f}
-
-Error estándar del control:
-
-{resultados['se_control']:.6f}
-
-Error estándar de la variante:
-
-{resultados['se_variante']:.6f}
-
-Error estándar de la diferencia:
-
-{resultados['se_diferencia']:.6f}
-
-INTERVALO DE CONFIANZA DEL UPLIFT RELATIVO (95%)
-
-Intervalo principal: [{resultados['ci_relativo_centrado'][0]:.2f}%, {resultados['ci_relativo_centrado'][1]:.2f}%]
-
-Escenario conservador: > {resultados['ci_relativo_derecha_izq']:.2f}%
-
-Escenario optimista: < {resultados['ci_relativo_izquierda_der']:.2f}%
+{comparison_data}
 
 GUÍA DE INTERPRETACIÓN
 

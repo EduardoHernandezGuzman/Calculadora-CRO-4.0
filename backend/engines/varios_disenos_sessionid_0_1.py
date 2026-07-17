@@ -13,7 +13,6 @@ import os
 import warnings
 from collections import defaultdict
 from io import BytesIO
-from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -25,6 +24,14 @@ try:
 except Exception:
     st = None  # FastAPI app: streamlit es opcional
 from matplotlib.backends.backend_pdf import PdfPages
+
+from backend.core.experiment_groups import (
+    STATUS_WINNER,
+    ExperimentGroups,
+    detect_session_groups,
+    make_comparison_record,
+    mark_best_comparison,
+)
 
 warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
@@ -60,10 +67,11 @@ def _interpretar_con_ia(resultados_ultimo_dia: Dict[str, Any], api_key: Optional
                 f"IC95%=[{v['ci'][0]:.4f}, {v['ci'][1]:.4f}]"
             )
 
-        if "_vs_" in str(k) and isinstance(v, dict):
+        if str(k).startswith("A_vs_") and isinstance(v, dict):
+            variant = str(k).split("_vs_", 1)[1]
             comparativas.append(
                 f"COMPARATIVA {k}:\n"
-                f"- Probabilidad de que el primero sea mejor: {v['prob_mejor']*100:.2f}%\n"
+                f"- Probabilidad de que {variant} supere al control A: {v['prob_mejor']*100:.2f}%\n"
                 f"- Uplift Medio Estimado: {v['uplift_media']*100:.2f}%\n"
                 f"- IC CENTRADO 95%: [{v['ci_centered'][0]*100:.2f}%, {v['ci_centered'][1]*100:.2f}%]\n"
                 f"- IC SUELO: > {v['ci_right'][0]*100:.2f}%\n"
@@ -159,67 +167,60 @@ class ConversionBayesBeta:
                 "muestras": muestras_array,
             }
 
-        for g1, g2 in combinations(grupos, 2):
-            for (a, b) in [(g1, g2), (g2, g1)]:
-                tasa_a = muestras[a]
-                tasa_b = muestras[b]
+        control = "A"
+        control_samples = muestras[control]
+        for variant in grupos:
+            if variant == control:
+                continue
+            variant_samples = muestras[variant]
 
-                uplift_samples = np.where(
-                    tasa_b != 0,
-                    (tasa_a - tasa_b) / tasa_b,
-                    0.0,
-                )
-                diff_samples = tasa_a - tasa_b
+            uplift_samples = np.where(
+                control_samples != 0,
+                (variant_samples - control_samples) / control_samples,
+                0.0,
+            )
+            diff_samples = variant_samples - control_samples
 
-                prob_mejor = float(np.mean(diff_samples > 0))
-                mean_uplift = float(np.mean(uplift_samples))
-                std_uplift = float(np.std(uplift_samples))
+            prob_mejor = float(np.mean(diff_samples > 0))
+            mean_uplift = float(np.mean(uplift_samples))
+            std_uplift = float(np.std(uplift_samples))
 
-                ci_centered = np.percentile(uplift_samples, [2.5, 97.5]).astype(np.float64)
-                ci_right = np.percentile(uplift_samples, [5.0, 100.0]).astype(np.float64)
-                ci_left = np.percentile(uplift_samples, [0.0, 95.0]).astype(np.float64)
+            ci_centered = np.percentile(uplift_samples, [2.5, 97.5]).astype(np.float64)
+            ci_right = np.percentile(uplift_samples, [5.0, 100.0]).astype(np.float64)
+            ci_left = np.percentile(uplift_samples, [0.0, 95.0]).astype(np.float64)
 
-                resultados[f"{a}_vs_{b}"] = {
-                    "uplift_media": mean_uplift,
-                    "uplift_std": std_uplift,
-                    "ci_centered": ci_centered,
-                    "ci_right": ci_right,
-                    "ci_left": ci_left,
-                    "prob_mejor": prob_mejor,
-                    "ganador": a if prob_mejor >= 0.95 else None,
-                    "diff": diff_samples,
-                }
+            resultados[f"A_vs_{variant}"] = {
+                "uplift_media": mean_uplift,
+                "uplift_std": std_uplift,
+                "ci_centered": ci_centered,
+                "ci_right": ci_right,
+                "ci_left": ci_left,
+                "prob_mejor": prob_mejor,
+                "ganador": variant if prob_mejor >= 0.95 else None,
+                "diff": diff_samples,
+            }
 
         self.historial.append(resultados)
 
 
-def _fig_histograma_raw(dia: str, raw_data: pd.DataFrame) -> Optional[plt.Figure]:
+def _fig_histograma_raw(
+    dia: str, raw_data: pd.DataFrame, groups: List[str]
+) -> Optional[plt.Figure]:
     if raw_data is None or raw_data.empty:
         return None
 
     fig, ax = plt.subplots(figsize=(10, 5))
     plotted = False
 
-    if "Conversiones A" in raw_data.columns:
-        s = raw_data["Conversiones A"].dropna()
+    for group in groups:
+        column = f"Conversiones {group}"
+        if column not in raw_data.columns:
+            continue
+        s = raw_data[column].dropna()
         if len(s) > 0:
             sns.histplot(
                 s,
-                label="Grupo A",
-                kde=False,
-                element="step",
-                alpha=0.4,
-                discrete=True,
-                ax=ax,
-            )
-            plotted = True
-
-    if "Conversiones B" in raw_data.columns:
-        s = raw_data["Conversiones B"].dropna()
-        if len(s) > 0:
-            sns.histplot(
-                s,
-                label="Grupo B",
+                label=f"Grupo {group}",
                 kde=False,
                 element="step",
                 alpha=0.4,
@@ -250,13 +251,15 @@ def _fig_posteriors_beta(dia: str, paso: Dict[str, Any], grupos: List[str]) -> p
     return fig
 
 
-def _fig_diff(dia: str, stats: Dict[str, Any], g1: str, g2: str) -> plt.Figure:
+def _fig_diff(
+    dia: str, stats: Dict[str, Any], control: str, variant: str
+) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(10, 5))
     diff = stats["diff"]
     sns.histplot(diff, stat="density", element="step", alpha=0.3, label="Histograma", ax=ax)
     sns.kdeplot(diff, fill=True, alpha=0.4, label="Densidad", ax=ax)
     ax.axvline(0, linestyle="--", label="Ref (0)")
-    ax.set_title(f"{dia} - Diferencia Absoluta ({g1} - {g2})")
+    ax.set_title(f"{dia} - Diferencia Absoluta ({variant} - {control})")
     ax.set_xlabel("Diferencia en Tasa de Conversión")
     ax.legend()
     return fig
@@ -279,17 +282,9 @@ def _build_beta_priors(
     return priors
 
 
-def _infer_grupos_from_columns(df: pd.DataFrame) -> List[str]:
-    grupos: List[str] = []
-    for c in df.columns:
-        if isinstance(c, str) and c.startswith("Conversiones "):
-            grupos.append(c.replace("Conversiones ", "").strip())
-    return sorted(list(dict.fromkeys(grupos)))
-
-
 def _aggregate_by_day_sessionid(
     df: pd.DataFrame,
-    grupos: List[str],
+    layout: ExperimentGroups,
 ) -> List[Tuple[Any, pd.DataFrame, Dict[str, Tuple[int, int]]]]:
     if "Día" not in df.columns:
         raise ValueError("Falta la columna 'Día' en el CSV.")
@@ -301,10 +296,8 @@ def _aggregate_by_day_sessionid(
         df_dia = df[df["Día"] == dia_val].copy()
         datos_agregados: Dict[str, Tuple[int, int]] = {}
 
-        for g in grupos:
-            col = f"Conversiones {g}"
-            if col not in df_dia.columns:
-                raise ValueError(f"Falta la columna '{col}' en el CSV.")
+        for g in layout.groups:
+            col = layout.value_columns[g]
             visitas = int(df_dia[col].count())
             conv = float(df_dia[col].sum(skipna=True))
             datos_agregados[g] = (visitas, int(conv))
@@ -312,6 +305,58 @@ def _aggregate_by_day_sessionid(
         out.append((dia_val, df_dia, datos_agregados))
 
     return out
+
+
+def _build_lightweight_comparisons(
+    paso: Dict[str, Any], variants: Tuple[str, ...]
+) -> List[Dict[str, Any]]:
+    comparisons = []
+    for variant in variants:
+        stats = paso[f"A_vs_{variant}"]
+        favorable = float(stats["uplift_media"]) > 0
+        significant = (
+            float(stats["prob_mejor"]) >= 0.95
+            and float(stats["ci_centered"][0]) > 0
+        )
+        comparisons.append(
+            make_comparison_record(
+                variant=variant,
+                control_value=float(paso["A"]["media"]),
+                variant_value=float(paso[variant]["media"]),
+                uplift_pct=float(stats["uplift_media"]) * 100,
+                difference=float(np.mean(stats["diff"])),
+                evidence_name="probability_superiority",
+                evidence_value=float(stats["prob_mejor"]),
+                interval_name="centered_95",
+                interval=[
+                    float(stats["ci_centered"][0]) * 100,
+                    float(stats["ci_centered"][1]) * 100,
+                ],
+                favorable=favorable,
+                significant=significant,
+                metrics={
+                    "uplift_std_pct": float(stats["uplift_std"]) * 100,
+                    "ci_floor_pct": [
+                        float(stats["ci_right"][0]) * 100,
+                        float(stats["ci_right"][1]) * 100,
+                    ],
+                    "ci_ceiling_pct": [
+                        float(stats["ci_left"][0]) * 100,
+                        float(stats["ci_left"][1]) * 100,
+                    ],
+                },
+            )
+        )
+
+    winners = [
+        item for item in comparisons
+        if item["comparison_status"] == STATUS_WINNER
+    ]
+    candidates = winners or [item for item in comparisons if item["favorable"]]
+    if not candidates:
+        return mark_best_comparison(comparisons, None, winner=False)
+    best = max(candidates, key=lambda item: item["evidence"]["value"])
+    return mark_best_comparison(comparisons, best["variant"], winner=bool(winners))
 
 
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -322,15 +367,12 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     openai_api_key = config.get("openai_api_key", "")
     expected_priors = config.get("expected_priors")
 
-    grupos = _infer_grupos_from_columns(df)
-    if not grupos:
-        raise ValueError(
-            "No se detectaron columnas 'Conversiones X'. Ej: 'Conversiones A', 'Conversiones B'."
-        )
+    layout = detect_session_groups(df.columns)
+    grupos = list(layout.groups)
 
     priors = _build_beta_priors(expected_priors, grupos)
     modelo = ConversionBayesBeta(priors=priors)
-    agregados = _aggregate_by_day_sessionid(df, grupos)
+    agregados = _aggregate_by_day_sessionid(df, layout)
 
     figures: List[plt.Figure] = []
     log_parts: List[str] = []
@@ -373,19 +415,27 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                 }
             )
 
-        f0 = _fig_histograma_raw(dia_label, df_dia_raw)
+        f0 = _fig_histograma_raw(dia_label, df_dia_raw, grupos_stats)
         if f0 is not None:
             figures.append(f0)
 
         figures.append(_fig_posteriors_beta(dia_label, paso, grupos_stats))
 
-        comparaciones = [k for k in paso.keys() if isinstance(k, str) and "_vs_" in k]
+        comparaciones = [
+            k for k in paso.keys()
+            if isinstance(k, str) and k.startswith("A_vs_")
+        ]
         for clave in comparaciones:
             stats = paso[clave]
-            g1, g2 = clave.split("_vs_")
-            figures.append(_fig_diff(dia_label, stats, g1, g2))
+            control, variant = clave.split("_vs_")
+            figures.append(_fig_diff(dia_label, stats, control, variant))
 
     summary_df = pd.DataFrame(summary_rows)
+    comparisons = (
+        _build_lightweight_comparisons(modelo.historial[-1], layout.variants)
+        if modelo.historial
+        else []
+    )
 
     pdf_bytes: Optional[bytes] = None
     if generate_pdf:
@@ -408,5 +458,5 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         "figures": figures,
         "pdf_bytes": pdf_bytes,
         "log_text": "\n\n".join(log_parts) if log_parts else "",
-        "comparisons": modelo.historial,
+        "comparisons": comparisons,
     }

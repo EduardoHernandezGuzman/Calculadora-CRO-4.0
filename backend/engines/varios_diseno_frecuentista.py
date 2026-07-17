@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import io
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,13 @@ try:
 except Exception:
     st = None  # FastAPI app: streamlit es opcional
 from matplotlib.backends.backend_pdf import PdfPages
+
+from backend.core.experiment_groups import (
+    STATUS_WINNER,
+    detect_aggregate_groups,
+    make_comparison_record,
+    mark_best_comparison,
+)
 
 try:
     from openai import OpenAI
@@ -34,7 +41,9 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+def interpretar_resultados_con_ia(
+    resultados: Any, api_key: Optional[str] = None
+) -> str:
     """
     Función opcional que envía los resultados a ChatGPT para obtener
     una interpretación en lenguaje natural (como si fuera un Director de CRO).
@@ -53,14 +62,30 @@ def interpretar_resultados_con_ia(resultados: Dict[str, Any], api_key: Optional[
 
     client = OpenAI(api_key=api_key)
 
-    g1, g2 = "Control (A)", "Variante (B)"
-    m1, m2 = resultados["media_real_g1"], resultados["media_real_g2"]
+    items = resultados if isinstance(resultados, list) else [resultados]
+    data_blocks = []
+    for item in items:
+        variant = item.get("variant", "B")
+        m1, m2 = item["media_real_g1"], item["media_real_g2"]
+        ci_rel_low, ci_rel_high = item["ci_relativo_centrado"]
+        data_blocks.append(
+            f"""COMPARATIVA A vs {variant}:
+Grupo Control (A):
+Visitas Acumuladas = {item['n_g1']}
+Conversiones Acumuladas = {int(item['conv_g1'])}
+Tasa Media = {m1:.4f}
 
-    uplift_pct = ((m2 - m1) / m1) * 100 if m1 != 0 else 0
-    precision_b_mejor = resultados["precision_b_mejor"] * 100
-    ci_rel_low, ci_rel_high = resultados["ci_relativo_centrado"]
-    cola_derecha_izq = resultados["ci_relativo_derecha_izq"]
-    cola_izquierda_der = resultados["ci_relativo_izquierda_der"]
+Grupo Variante ({variant}):
+Visitas Acumuladas = {item['n_g2']}
+Conversiones Acumuladas = {int(item['conv_g2'])}
+Tasa Media = {m2:.4f}
+
+UPLIFT (MEJORA) ESTIMADO: {item['uplift_%']:.2f}%
+NIVEL DE SIGNIFICANCIA DE QUE {variant} > A: {item['precision_b_mejor'] * 100:.2f}%
+IC centrado 95%: [{ci_rel_low:.2f}%, {ci_rel_high:.2f}%]
+Límite inferior (escenario conservador): > {item['ci_relativo_derecha_izq']:.2f}%
+Límite superior (escenario optimista): < {item['ci_relativo_izquierda_der']:.2f}%"""
+        )
 
     prompt = f"""
 Eres un Director de CRO. Analiza los resultados de un test A/B y proporciona una recomendación clara de negocio basada en inferencia frecuentista.
@@ -70,31 +95,7 @@ No uses la palabra "probabilidad". Usa siempre "NIVEL DE SIGNIFICANCIA".
 Lenguaje claro, ejecutivo y sin fórmulas.
 
 DATOS DEL TEST:
-
-Grupo Control (A):
-Visitas Acumuladas = {resultados["n_g1"]}
-Conversiones Acumuladas = {int(resultados["conv_g1"])}
-Tasa Media = {m1:.4f}
-
-Grupo Variante (B):
-Visitas Acumuladas = {resultados["n_g2"]}
-Conversiones Acumuladas = {int(resultados["conv_g2"])}
-Tasa Media = {m2:.4f}
-
-TASA DE CONVERSIÓN MEDIA:
-{g1}: {m1:.4f}
-{g2}: {m2:.4f}
-
-UPLIFT (MEJORA) ESTIMADO:
-La variante B mejora un {uplift_pct:.2f}% respecto al control A.
-
-NIVEL DE SIGNIFICANCIA DE QUE B > A:
-{precision_b_mejor:.2f}%
-
-INTERVALOS DEL UPLIFT RELATIVO:
-IC centrado 95%: [{ci_rel_low:.2f}%, {ci_rel_high:.2f}%]
-Límite inferior (escenario conservador): > {cola_derecha_izq:.2f}%
-Límite superior (escenario optimista): < {cola_izquierda_der:.2f}%
+{chr(10).join(data_blocks)}
 
 REGLAS DE DECISIÓN:
 
@@ -152,7 +153,14 @@ class AnalisisBootstrapAgregado:
         self.distribuciones_medias: Dict[str, np.ndarray] = {}
         self.distribuciones_uplift_rel: Optional[np.ndarray] = None
 
-    def analizar(self, n_a: int, conv_a: int, n_b: int, conv_b: int):
+    def analizar(
+        self,
+        n_a: int,
+        conv_a: int,
+        n_b: int,
+        conv_b: int,
+        variant: str = "B",
+    ):
         """
         Paso 1: Convertir los datos agregados en vectores de 0s y 1s.
         Ejemplo: si n_a=100 y conv_a=30, creamos un vector con 30 unos y 70 ceros.
@@ -247,6 +255,8 @@ class AnalisisBootstrapAgregado:
 
         # Guardamos todos los resultados en un diccionario para usarlos después
         self.resultados = {
+            "control": "A",
+            "variant": variant,
             "n_g1": int(n_a),
             "n_g2": int(n_b),
             "conv_g1": int(conv_a),
@@ -273,20 +283,21 @@ class AnalisisBootstrapAgregado:
         Genera un reporte por consola o PDF con los resultados del análisis.
         """
         r = self.resultados
+        variant = r["variant"]
 
         # === RESULTADOS POR CONSOLA ===
         print("\n" + "=" * 50)
-        print(f"{'ANÁLISIS DE PRECISIÓN B vs A':^50}")
+        print(f"{f'ANÁLISIS DE PRECISIÓN {variant} vs A':^50}")
         print("=" * 50)
         print(
             f"{'Diseño A':<20} | Visitas: {r['n_g1']:>8} | Convs: {int(r['conv_g1']):>6}"
         )
         print(
-            f"{'Diseño B':<20} | Visitas: {r['n_g2']:>8} | Convs: {int(r['conv_g2']):>6}"
+            f"{f'Diseño {variant}':<20} | Visitas: {r['n_g2']:>8} | Convs: {int(r['conv_g2']):>6}"
         )
         print("-" * 50)
         print(
-            f"NIVEL DE SIGNIFICANCIA DE QUE B > A: {r['precision_b_mejor'] * 100:.2f}%"
+            f"NIVEL DE SIGNIFICANCIA DE QUE {variant} > A: {r['precision_b_mejor'] * 100:.2f}%"
         )
         print(
             f"IC CENTRADO (UPLIFT): [{r['ci_relativo_centrado'][0]:.2f}%, {r['ci_relativo_centrado'][1]:.2f}%]"
@@ -307,12 +318,12 @@ class AnalisisBootstrapAgregado:
                 f"REPORTE DE NIVEL DE SIGNIFICANCIA (DATOS AGREGADOS)\n\n"
                 f"Métricas de Control (A):\n"
                 f"Visitas: {r['n_g1']} | Conversiones: {int(r['conv_g1'])}.\n\n"
-                f"Métricas de Variante (B):\n"
+                f"Métricas de Variante ({variant}):\n"
                 f"Visitas: {r['n_g2']} | Conversiones: {int(r['conv_g2'])}.\n\n"
                 f"--------------------------------------------\n"
                 f"Tasa Conv. A: {r['media_real_g1']:.4%}\n"
                 f"Tasa Conv. B: {r['media_real_g2']:.4%}\n\n"
-                f"NIVEL DE SIGNIFICANCIA DE QUE B > A: {r['precision_b_mejor'] * 100:.2f}%\n\n"
+                f"NIVEL DE SIGNIFICANCIA DE QUE {variant} > A: {r['precision_b_mejor'] * 100:.2f}%\n\n"
                 f"INTERVALOS DEL UPLIFT RELATIVO:\n"
                 f"IC Centrado: [{r['ci_relativo_centrado'][0]:.2f}%, {r['ci_relativo_centrado'][1]:.2f}%]\n"
                 f"Cola derecha (IC 95% izquierda): > {r['ci_relativo_derecha_izq']:.2f}%\n"
@@ -356,7 +367,7 @@ class AnalisisBootstrapAgregado:
             linestyle=":",
             label=f"Lím. Der: {r['ci_diferencia'][1]:.4f}",
         )
-        plt.title("Precisión del Uplift: Distribución de la diferencia (B - A)")
+        plt.title(f"Precisión del Uplift: Distribución de la diferencia ({variant} - A)")
         plt.xlabel("Diferencia de Tasas de Conversión")
         plt.legend(loc="upper right")
 
@@ -364,6 +375,103 @@ class AnalisisBootstrapAgregado:
             pdf.savefig(fig)
 
         return fig
+
+
+def _build_comparisons(
+    results: List[Dict[str, Any]], interval_type: str
+) -> List[Dict[str, Any]]:
+    comparisons = []
+    for r in results:
+        uplift = float(r["uplift_%"])
+        precision = float(r["precision_b_mejor"])
+        direction = "positive" if uplift > 0 else "negative" if uplift < 0 else "neutral"
+
+        if interval_type == "derecha":
+            evidence = precision
+            favorable = uplift > 0
+            significant = evidence > 0.95 and float(r["ci_relativo_derecha_izq"]) > 0
+            interval = [float(r["ci_relativo_derecha_izq"]), None]
+            interval_name = "right_95"
+        elif interval_type == "izquierda":
+            evidence = 1 - precision
+            favorable = uplift < 0
+            significant = evidence > 0.95 and float(r["ci_relativo_izquierda_der"]) < 0
+            interval = [None, float(r["ci_relativo_izquierda_der"])]
+            interval_name = "left_95"
+        else:
+            evidence = precision
+            favorable = uplift > 0
+            significant = (
+                evidence > 0.95
+                and float(r["ci_relativo_centrado"][0]) > 0
+            )
+            interval = [
+                float(r["ci_relativo_centrado"][0]),
+                float(r["ci_relativo_centrado"][1]),
+            ]
+            interval_name = "centered_95"
+
+        comparisons.append(
+            make_comparison_record(
+                variant=r["variant"],
+                control_value=float(r["media_real_g1"]),
+                variant_value=float(r["media_real_g2"]),
+                uplift_pct=uplift,
+                difference=float(r["media_real_g2"] - r["media_real_g1"]),
+                evidence_name="level_of_significance",
+                evidence_value=evidence,
+                interval_name=interval_name,
+                interval=interval,
+                favorable=favorable,
+                significant=significant,
+                metrics={
+                    "direction": direction,
+                    "precision_variant_better": precision,
+                    "ci_centered_pct": list(r["ci_relativo_centrado"]),
+                    "ci_right_floor_pct": float(r["ci_relativo_derecha_izq"]),
+                    "ci_left_ceiling_pct": float(r["ci_relativo_izquierda_der"]),
+                    "z_score": float(r["z_score"]),
+                    "se_control": float(r["se_control"]),
+                    "se_variante": float(r["se_variante"]),
+                    "se_diferencia": float(r["se_diferencia"]),
+                },
+            )
+        )
+
+    winners = [
+        item for item in comparisons
+        if item["comparison_status"] == STATUS_WINNER
+    ]
+    candidates = winners or [item for item in comparisons if item["favorable"]]
+    if not candidates:
+        return mark_best_comparison(comparisons, None, winner=False)
+    best = max(candidates, key=lambda item: item["evidence"]["value"])
+    return mark_best_comparison(comparisons, best["variant"], winner=bool(winners))
+
+
+def _summary_row(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "control": "A",
+        "variant": r["variant"],
+        "n_visitas_A": r["n_g1"],
+        "n_visitas_B": r["n_g2"],
+        "conv_A": r["conv_g1"],
+        "conv_B": r["conv_g2"],
+        "tasa_A": r["media_real_g1"],
+        "tasa_B": r["media_real_g2"],
+        "uplift_%": r["uplift_%"],
+        "se_control": r["se_control"],
+        "se_variante": r["se_variante"],
+        "se_diferencia": r["se_diferencia"],
+        "z_score": r["z_score"],
+        "precision_B_mejor": r["precision_b_mejor"],
+        "ci_diff_low": r["ci_diferencia"][0],
+        "ci_diff_high": r["ci_diferencia"][1],
+        "ci_uplift_center_low": r["ci_relativo_centrado"][0],
+        "ci_uplift_center_high": r["ci_relativo_centrado"][1],
+        "ci_right_95_left": r["ci_relativo_derecha_izq"],
+        "ci_left_95_right": r["ci_relativo_izquierda_der"],
+    }
 
 
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -379,22 +487,22 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
+    interval_type = str(config.get("freq_interval_type", "centrado"))
+    layout = detect_aggregate_groups(df.columns)
 
-    # Verificamos que el DataFrame tenga las columnas que necesitamos
-    required = ["Visitas A", "Visitas B", "Conversiones A", "Conversiones B"]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Faltan columnas obligatorias en el CSV: {missing}")
-
-    # Sumamos todas las filas del CSV para tener los totales agregados
-    total_v_a = int(df["Visitas A"].sum())
-    total_v_b = int(df["Visitas B"].sum())
-    total_c_a = int(df["Conversiones A"].sum())
-    total_c_b = int(df["Conversiones B"].sum())
-
-    # === EJECUTAMOS EL BOOTSTRAP ===
-    analisis = AnalisisBootstrapAgregado(n_iteraciones=n_iteraciones)
-    analisis.analizar(total_v_a, total_c_a, total_v_b, total_c_b)
+    total_v_a = int(df[layout.visit_columns["A"]].sum())
+    total_c_a = int(df[layout.value_columns["A"]].sum())
+    analyses = []
+    for variant in layout.variants:
+        analysis = AnalisisBootstrapAgregado(n_iteraciones=n_iteraciones)
+        analysis.analizar(
+            total_v_a,
+            total_c_a,
+            int(df[layout.visit_columns[variant]].sum()),
+            int(df[layout.value_columns[variant]].sum()),
+            variant=variant,
+        )
+        analyses.append(analysis)
 
     figures: List[Any] = []
     pdf_bytes: Optional[bytes] = None
@@ -403,50 +511,32 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     if generate_pdf:
         bio = io.BytesIO()
         with PdfPages(bio) as pdf:
-            fig_diff = analisis.generar_reporte(pdf)
-            if fig_diff is not None:
-                figures.append(fig_diff)
+            for analysis in analyses:
+                fig_diff = analysis.generar_reporte(pdf)
+                if fig_diff is not None:
+                    figures.append(fig_diff)
         pdf_bytes = bio.getvalue()
     else:
-        fig_diff = analisis.generar_reporte(pdf=None)
-        if fig_diff is not None:
-            figures.append(fig_diff)
+        for analysis in analyses:
+            fig_diff = analysis.generar_reporte(pdf=None)
+            if fig_diff is not None:
+                figures.append(fig_diff)
 
     # === INTERPRETACIÓN CON IA (opcional) ===
     log_text = ""
     if include_ai:
-        log_text = interpretar_resultados_con_ia(analisis.resultados, api_key=openai_api_key)
+        log_text = interpretar_resultados_con_ia(
+            [analysis.resultados for analysis in analyses], api_key=openai_api_key
+        )
 
-    # === ARMAMOS EL RESUMEN FINAL ===
-    r = analisis.resultados
-    summary = pd.DataFrame(
-        [
-            {
-                "n_visitas_A": r["n_g1"],
-                "n_visitas_B": r["n_g2"],
-                "conv_A": r["conv_g1"],
-                "conv_B": r["conv_g2"],
-                "tasa_A": r["media_real_g1"],
-                "tasa_B": r["media_real_g2"],
-                "uplift_%": r["uplift_%"],
-                "se_control": r["se_control"],
-                "se_variante": r["se_variante"],
-                "se_diferencia": r["se_diferencia"],
-                "z_score": r["z_score"],
-                "precision_B_mejor": r["precision_b_mejor"],
-                "ci_diff_low": r["ci_diferencia"][0],
-                "ci_diff_high": r["ci_diferencia"][1],
-                "ci_uplift_center_low": r["ci_relativo_centrado"][0],
-                "ci_uplift_center_high": r["ci_relativo_centrado"][1],
-                "ci_right_95_left": r["ci_relativo_derecha_izq"],
-                "ci_left_95_right": r["ci_relativo_izquierda_der"],
-            }
-        ]
-    )
+    results = [analysis.resultados for analysis in analyses]
+    summary = pd.DataFrame([_summary_row(result) for result in results])
+    comparisons = _build_comparisons(results, interval_type)
 
     return {
         "summary": summary,
         "figures": figures,
         "pdf_bytes": pdf_bytes,
         "log_text": log_text,
+        "comparisons": comparisons,
     }

@@ -505,6 +505,11 @@ body {
 }
 
 /* Table styles */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -552,6 +557,180 @@ body {
   font-weight: 600;
   margin-bottom: 0.75rem;
   color: var(--text-primary);
+}
+
+/* Multivariant comparison results */
+.selection-overview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  margin: 1rem 0 1.25rem;
+  border: 1px solid var(--border-color);
+  border-left-width: 5px;
+  border-radius: var(--border-radius);
+  background: var(--background-card);
+}
+
+.selection-overview b,
+.selection-overview span {
+  display: block;
+}
+
+.selection-overview span:not(.selection-icon) {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.selection-icon {
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.selection-winner { border-left-color: #087f5b; background: #f0fdf4; }
+.selection-winner .selection-icon { color: #087f5b; }
+.selection-candidate { border-left-color: #b45309; background: #fffbeb; }
+.selection-candidate .selection-icon { color: #b45309; }
+.selection-none { border-left-color: #64748b; background: #f8fafc; }
+.selection-none .selection-icon { color: #64748b; }
+
+.comparisons-section {
+  margin-bottom: 1.5rem;
+}
+
+.comparisons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.comparison-card {
+  border: 1px solid var(--border-color);
+  border-top: 5px solid #94a3b8;
+  border-radius: var(--border-radius);
+  padding: 1.25rem;
+  background: var(--background-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.comparison-winner {
+  border-color: #087f5b;
+  border-top-color: #087f5b;
+  box-shadow: 0 8px 24px rgba(8, 127, 91, 0.16);
+}
+
+.comparison-candidate {
+  border-color: #b45309;
+  border-top-color: #b45309;
+  box-shadow: 0 8px 24px rgba(180, 83, 9, 0.13);
+}
+
+.comparison-conclusive { border-top-color: #2563eb; }
+.comparison-neutral { background: #fbfcfe; }
+
+.comparison-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.comparison-card h3 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.comparison-kicker {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.comparison-badge {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.comparison-winner .comparison-badge { color: #087f5b; background: #dcfce7; }
+.comparison-candidate .comparison-badge { color: #92400e; background: #fef3c7; }
+.comparison-conclusive .comparison-badge { color: #1d4ed8; background: #dbeafe; }
+
+.comparison-core {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.comparison-core div,
+.comparison-interval {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--background-light);
+}
+
+.comparison-core span,
+.comparison-interval span,
+.comparison-details b {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.comparison-core strong,
+.comparison-interval strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.05rem;
+}
+
+.comparison-interval {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.comparison-details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.comparison-details span {
+  font-size: 0.84rem;
+}
+
+.ai-interpretation {
+  margin: 1.5rem 0;
+}
+
+.ai-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.ai-heading > span {
+  padding: 0.18rem 0.45rem;
+  border-radius: 5px;
+  background: #0f766e;
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 /* Figures */
@@ -803,9 +982,14 @@ body {
 /* Entrada manual de datos (frecuentista) */
 .manual-entry-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5rem;
   margin-bottom: 1.5rem;
+}
+
+.manual-entry-group.manual-control {
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 .manual-entry-group {
@@ -832,6 +1016,21 @@ body {
 @media (max-width: 700px) {
   .manual-entry-grid {
     grid-template-columns: 1fr;
+  }
+
+  .comparisons-grid,
+  .comparison-core {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-card-header,
+  .comparison-interval {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .comparison-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

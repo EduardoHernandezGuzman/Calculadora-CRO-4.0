@@ -1,0 +1,7 @@
+Día,SessionID,Conversiones A,Conversiones B,Conversiones C
+1,A-001,1,,
+1,A-002,0,,
+1,B-001,,1,
+1,B-002,,0,
+1,C-001,,,0
+1,C-002,,,1

@@ -176,7 +176,6 @@ function renderFreqConfig() {
 
 function renderCalculatorMain() {
   const main = document.getElementById('calculator-main');
-  const freq = isFreqEngine();
 
   const csvPanel = `
     <div id="method-csv">
@@ -204,9 +203,9 @@ function renderCalculatorMain() {
       Esta herramienta te permite analizar los resultados de tus tests A/B usando modelos estad&iacute;sticos bayesianos o frecuentistas. Adem&aacute;s, te ayudaremos a la interpretaci&oacute;n de los resultados mediante Inteligencia Artificial. Sube un archivo CSV con el formato indicado y analiza tu test A/B.
     </div>
     <div class="section-spacer"></div>
-    ${freq ? renderInputMethodTabs() : ''}
+    ${renderInputMethodTabs()}
     ${csvPanel}
-    ${freq ? renderManualEntryPanel() : ''}
+    ${renderManualEntryPanel()}
     <div id="results-container"></div>
   `;
 
@@ -223,29 +222,26 @@ function renderInputMethodTabs() {
 }
 
 function renderManualEntryPanel() {
+  const groups = ['A', 'B', 'C', 'D', 'E'];
+  const cards = groups.map(group => `
+    <div class="manual-entry-group ${group === 'A' ? 'manual-control' : ''}">
+      <div class="manual-entry-title">${group === 'A' ? 'Grupo A (Control)' : `Variante ${group} (opcional)`}</div>
+      <label class="input-label" for="manual-${group.toLowerCase()}-visitas">Usuarios / sesiones</label>
+      <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-visitas" class="form-input" placeholder="${group === 'A' || group === 'B' ? 'Ej. 2800' : 'Dejar vacío si no se usa'}">
+      <label class="input-label" for="manual-${group.toLowerCase()}-conv">Conversiones</label>
+      <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-conv" class="form-input" placeholder="${group === 'A' || group === 'B' ? 'Ej. 580' : 'Dejar vacío si no se usa'}">
+    </div>
+  `).join('');
   return `
     <div id="method-manual" style="display:none;">
       <p class="sub-header">Introducir datos manualmente</p>
       <div class="hint-row">
         <span style="font-size:18px;">✍️</span>
-        <span>Introduce los totales agregados de tu test A/B (usuarios o sesiones y conversiones de cada variante).</span>
+        <span>Introduce el control A y entre una y cuatro variantes. Las variantes vacías no se enviarán.</span>
       </div>
       <div class="subsection-spacer"></div>
       <div class="manual-entry-grid">
-        <div class="manual-entry-group">
-          <div class="manual-entry-title">Variante A (Control)</div>
-          <label class="input-label" for="manual-a-visitas">Usuarios / sesiones</label>
-          <input type="number" min="0" step="1" id="manual-a-visitas" class="form-input" placeholder="Ej. 2823">
-          <label class="input-label" for="manual-a-conv">Conversiones</label>
-          <input type="number" min="0" step="1" id="manual-a-conv" class="form-input" placeholder="Ej. 589">
-        </div>
-        <div class="manual-entry-group">
-          <div class="manual-entry-title">Variante B</div>
-          <label class="input-label" for="manual-b-visitas">Usuarios / sesiones</label>
-          <input type="number" min="0" step="1" id="manual-b-visitas" class="form-input" placeholder="Ej. 2694">
-          <label class="input-label" for="manual-b-conv">Conversiones</label>
-          <input type="number" min="0" step="1" id="manual-b-conv" class="form-input" placeholder="Ej. 541">
-        </div>
+        ${cards}
       </div>
       <div class="btn-row" style="justify-content:center;">
         <button class="btn btn-primary" onclick="runManualAnalysis()">Analizar experimento</button>
@@ -312,19 +308,30 @@ function handleFile(file) {
   reader.onload = function(e) {
     const text = e.target.result;
     const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length === 0) {
+      showError('El CSV está vacío.');
+      return;
+    }
     const headers = lines[0].split(',').map(h => h.trim());
+    const validationError = validateCsvHeaders(headers);
+    if (validationError) {
+      uploadedCsvFile = null;
+      document.getElementById('csv-preview').innerHTML = '';
+      showError(validationError);
+      return;
+    }
 
     let tableHtml = '<div class="section-spacer"></div><div class="success-box">✅ \u00a1Archivo cargado correctamente!</div>';
     tableHtml += '<p style="font-weight:600;margin-bottom:0.5rem;">Vista previa de tus datos:</p>';
     tableHtml += '<table class="data-table"><thead><tr>';
-    headers.forEach(h => { tableHtml += `<th>${h}</th>`; });
+    headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
     tableHtml += '</tr></thead><tbody>';
 
     const maxRows = Math.min(lines.length - 1, 10);
     for (let i = 1; i <= maxRows; i++) {
       const cols = lines[i].split(',').map(c => c.trim());
       tableHtml += '<tr>';
-      cols.forEach(c => { tableHtml += `<td>${c}</td>`; });
+      cols.forEach(c => { tableHtml += `<td>${escapeHtml(c)}</td>`; });
       tableHtml += '</tr>';
     }
     tableHtml += '</tbody></table>';
@@ -361,6 +368,7 @@ function buildAnalysisConfig() {
     config.num_samples = 20000;
   } else {
     config.n_iteraciones = 10000;
+    config.freq_interval_type = window.State.freq_interval_type || 'centrado';
   }
 
   return config;
@@ -395,26 +403,89 @@ async function runAnalysis() {
   await analyzeFile(uploadedCsvFile, engineKey);
 }
 
-// Construye un CSV a partir de los totales agregados introducidos manualmente,
-// en el formato que espera el motor frecuentista seleccionado.
-function buildManualCsv(engineKey, va, ca, vb, cb) {
-  if (engineKey === 'freq_sid' || engineKey === 'freq_pvalue_sid') {
-    // El motor con Session ID espera valores por sesión en dos columnas (A, B).
-    // Representamos los datos binomiales como vectores 0/1 (convierte / no convierte),
-    // estadísticamente equivalentes a los totales agregados.
-    const n = Math.max(va, vb);
-    const lines = ['A,B'];
-    for (let i = 0; i < n; i++) {
-      const a = i < va ? (i < ca ? 1 : 0) : '';
-      const b = i < vb ? (i < cb ? 1 : 0) : '';
-      lines.push(`${a},${b}`);
-    }
-    return lines.join('\n') + '\n';
+function validateCsvHeaders(headers) {
+  const headerSet = new Set(headers);
+  const canonical = ['A', 'B', 'C', 'D', 'E'].filter(group => headerSet.has(`Conversiones ${group}`));
+  const legacy = ['A', 'B', 'C', 'D', 'E'].filter(group => headerSet.has(group));
+  const sessionMode = Boolean(window.State.session_id);
+
+  if (sessionMode && canonical.length && legacy.length) {
+    return 'No mezcles columnas canónicas “Conversiones X” con columnas heredadas “A”, “B”, etc.';
   }
-  // freq_no_sid: totales agregados en una sola fila.
-  return `Visitas A,Visitas B,Conversiones A,Conversiones B\n${va},${vb},${ca},${cb}\n`;
+  const invalidVariants = headers.filter(header => {
+    const match = header.match(/^(?:Visitas|Conversiones)\s+(.+)$/i);
+    return match && !['A', 'B', 'C', 'D', 'E'].includes(match[1].toUpperCase());
+  });
+  if (invalidVariants.length) return 'Solo se admiten variantes entre B y E.';
+
+  if (sessionMode) {
+    const groups = canonical.length ? canonical : legacy;
+    if (!groups.includes('A')) return 'Falta el grupo control A en el CSV.';
+    if (!groups.some(group => group !== 'A')) return 'Debe existir al menos una variante entre B y E.';
+    if (canonical.length && !headerSet.has('Día')) return 'El formato recomendado con Session ID debe incluir la columna Día.';
+    if (canonical.length && !headerSet.has('SessionID')) return 'El formato con Session ID debe incluir la columna SessionID.';
+    return '';
+  }
+
+  if (!headerSet.has('Visitas A') || !headerSet.has('Conversiones A')) {
+    return 'Faltan “Visitas A” o “Conversiones A” para el grupo control.';
+  }
+  const variants = ['B', 'C', 'D', 'E'].filter(group => headerSet.has(`Visitas ${group}`) || headerSet.has(`Conversiones ${group}`));
+  if (!variants.length) return 'Debe existir al menos una variante entre B y E.';
+  for (const group of variants) {
+    if (!headerSet.has(`Visitas ${group}`) || !headerSet.has(`Conversiones ${group}`)) {
+      return `La variante ${group} necesita las columnas “Visitas ${group}” y “Conversiones ${group}”.`;
+    }
+  }
+  return '';
 }
 
+// Construye únicamente las columnas de los grupos utilizados.
+function buildManualCsv(engineKey, groups) {
+  if (window.State.session_id) {
+    const headers = ['Día', 'SessionID', ...groups.map(item => `Conversiones ${item.group}`)];
+    const lines = [headers.join(',')];
+    groups.forEach(item => {
+      const baseConversions = Math.floor(item.conversions / item.visits);
+      const remainder = item.conversions % item.visits;
+      for (let i = 0; i < item.visits; i++) {
+        const sessionConversions = baseConversions + (i < remainder ? 1 : 0);
+        const values = groups.map(candidate => candidate.group === item.group ? sessionConversions : '');
+        lines.push(['1', `${item.group}-${i + 1}`, ...values].join(','));
+      }
+    });
+    return lines.join('\n') + '\n';
+  }
+  const headers = ['Día'];
+  const values = ['1'];
+  groups.forEach(item => {
+    headers.push(`Visitas ${item.group}`, `Conversiones ${item.group}`);
+    values.push(item.visits, item.conversions);
+  });
+  return `${headers.join(',')}\n${values.join(',')}\n`;
+}
+
+function readManualGroups() {
+  const groups = [];
+  const allowsMultipleConversions = window.State.enfoque === 'bayesiano' && window.State.tipo_valores === '0_inf';
+  for (const group of ['A', 'B', 'C', 'D', 'E']) {
+    const visitsRaw = document.getElementById(`manual-${group.toLowerCase()}-visitas`).value.trim();
+    const conversionsRaw = document.getElementById(`manual-${group.toLowerCase()}-conv`).value.trim();
+    if (!visitsRaw && !conversionsRaw && group !== 'A') continue;
+    if (!visitsRaw || !conversionsRaw) throw new Error(`Completa usuarios y conversiones del grupo ${group}, o deja ambos campos vacíos.`);
+    const visits = Number(visitsRaw);
+    const conversions = Number(conversionsRaw);
+    if (!Number.isInteger(visits) || visits <= 0) throw new Error(`Los usuarios / sesiones de ${group} deben ser un entero mayor que 0.`);
+    if (!Number.isInteger(conversions) || conversions < 0) throw new Error(`Las conversiones de ${group} deben ser un entero igual o mayor que 0.`);
+    if (!allowsMultipleConversions && conversions > visits) {
+      throw new Error(`Las conversiones de ${group} no pueden superar sus usuarios / sesiones.`);
+    }
+    groups.push({ group, visits, conversions });
+  }
+  if (!groups.some(item => item.group === 'A')) throw new Error('El grupo control A es obligatorio.');
+  if (!groups.some(item => item.group !== 'A')) throw new Error('Introduce al menos una variante entre B y E.');
+  return groups;
+}
 async function runManualAnalysis() {
   const engineKey = window.State.selected_engine_key;
   if (!engineKey) {
@@ -422,37 +493,14 @@ async function runManualAnalysis() {
     return;
   }
 
-  const va = parseInt(document.getElementById('manual-a-visitas').value, 10);
-  const ca = parseInt(document.getElementById('manual-a-conv').value, 10);
-  const vb = parseInt(document.getElementById('manual-b-visitas').value, 10);
-  const cb = parseInt(document.getElementById('manual-b-conv').value, 10);
-
-  const campos = [
-    ['Usuarios / sesiones (A)', va],
-    ['Conversiones (A)', ca],
-    ['Usuarios / sesiones (B)', vb],
-    ['Conversiones (B)', cb],
-  ];
-  for (const [label, v] of campos) {
-    if (isNaN(v) || v < 0) {
-      showError(`Introduce un valor válido (entero ≥ 0) en "${label}".`);
-      return;
-    }
-  }
-  if (va === 0 || vb === 0) {
-    showError('Los usuarios / sesiones de A y B deben ser mayores que 0.');
+  let groups;
+  try {
+    groups = readManualGroups();
+  } catch (error) {
+    showError(error.message);
     return;
   }
-  if (ca > va) {
-    showError('Las conversiones de A no pueden superar sus usuarios / sesiones.');
-    return;
-  }
-  if (cb > vb) {
-    showError('Las conversiones de B no pueden superar sus usuarios / sesiones.');
-    return;
-  }
-
-  const csv = buildManualCsv(engineKey, va, ca, vb, cb);
+  const csv = buildManualCsv(engineKey, groups);
   const file = new File([csv], 'datos_manuales.csv', { type: 'text/csv' });
 
   await analyzeFile(file, engineKey);
@@ -478,16 +526,31 @@ function displayResults(out) {
   let html = '<div class="section-spacer"></div><hr><div class="section-spacer"></div>';
   html += '<h2 class="main-header">Resultados</h2>';
 
-  const hasSummary = out.summary && out.summary.length > 0;
+  const comparisons = Array.isArray(out.comparisons) ? out.comparisons : [];
+  const best = comparisons.filter(item => item && item.is_best === true);
+  if (!comparisons.length) {
+    container.innerHTML = html + '<div class="error-box"><b>No se recibieron comparativas.</b><br>El backend debe devolver al menos una comparación de una variante contra A.</div>';
+    return;
+  }
+  if (best.length > 1) {
+    container.innerHTML = html + '<div class="error-box"><b>Respuesta inconsistente.</b><br>El backend ha marcado más de una variante como mejor resultado.</div>';
+    return;
+  }
+
+  html += renderSelectionOverview(comparisons);
+  html += renderComparisonCards(comparisons, out.summary || []);
+
+  const hasSummary = Array.isArray(out.summary) && out.summary.length > 0;
   const hasConsole = hasSummary;
-  const hasLog = out.log_text;
+  const hasLog = typeof out.log_text === 'string' && out.log_text.trim() !== '';
   const hasFigs = out.figures && out.figures.length > 0;
   const hasPdf = out.pdf_bytes;
+
+  if (hasLog) html += renderLogTab(out);
 
   const tabs = [];
   if (hasSummary) tabs.push('resumen');
   if (hasConsole) tabs.push('consola');
-  if (hasLog) tabs.push('log');
   if (hasFigs) tabs.push('graficos');
   if (hasPdf) tabs.push('pdf');
 
@@ -496,9 +559,6 @@ function displayResults(out) {
     const tabLabels = {
       resumen: 'Resumen',
       consola: 'Salida tipo consola',
-      log: out.log_text && (out.log_text.includes('IA') || out.log_text.includes('GPT') || out.log_text.includes('OpenAI'))
-        ? 'Interpretaci\u00f3n IA'
-        : 'Interpretaci\u00f3n / Log',
       graficos: 'Gr\u00e1ficos',
       pdf: 'Reporte'
     };
@@ -512,7 +572,6 @@ function displayResults(out) {
     html += `<div class="tab-content ${i === 0 ? 'active' : ''}" id="tab-${t}">`;
     if (t === 'resumen') html += renderSummaryTab(out);
     else if (t === 'consola') html += renderConsoleTab(out);
-    else if (t === 'log') html += renderLogTab(out);
     else if (t === 'graficos') html += renderFiguresTab(out);
     else if (t === 'pdf') html += renderPdfTab(out);
     html += '</div>';
@@ -521,261 +580,172 @@ function displayResults(out) {
   container.innerHTML = html;
 }
 
-function _pct(v) {
-  if (v === null || v === undefined) return '';
-  const n = typeof v === 'number' ? v : parseFloat(v);
-  if (isNaN(n)) return v;
-  return (n * 100).toFixed(2) + '%';
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
 
-function _findComparison(comparisons, dia) {
-  if (!comparisons) return null;
-  const target = String(dia);
-  for (const c of comparisons) {
-    if (String(c.dia) === target || String(c.dia) === 'D\u00eda ' + target) {
-      return c;
-    }
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatNumber(value, decimals = 4) {
+  const number = finiteNumber(value);
+  return number === null ? '—' : number.toFixed(decimals);
+}
+
+function formatPercentValue(value, decimals = 2) {
+  const number = finiteNumber(value);
+  return number === null ? '—' : `${number.toFixed(decimals)}%`;
+}
+
+function formatRateOrMean(value) {
+  return formatNumber(value, 4);
+}
+
+function formatInterval(interval) {
+  if (!interval || typeof interval !== 'object') return '—';
+  const low = finiteNumber(interval.low);
+  const high = finiteNumber(interval.high);
+  if (low !== null && high === null) return `> ${low.toFixed(2)}%`;
+  if (low === null && high !== null) return `< ${high.toFixed(2)}%`;
+  if (low !== null && high !== null) return `[${low.toFixed(2)}%, ${high.toFixed(2)}%]`;
+  return '—';
+}
+
+function evidenceLabel(comparison) {
+  const variant = escapeHtml(comparison.variant || '—');
+  const name = comparison.evidence && comparison.evidence.name;
+  if (name === 'probability_superiority') return `Probabilidad de que ${variant} supere al control`;
+  if (name === 'level_of_significance') return `Nivel de significancia de que ${variant} supere al control`;
+  return 'p-value';
+}
+
+function evidenceValue(comparison) {
+  const name = comparison.evidence && comparison.evidence.name;
+  const value = comparison.evidence && comparison.evidence.value;
+  return name === 'p_value' ? formatNumber(value, 4) : formatPercentValue(finiteNumber(value) === null ? null : Number(value) * 100, 2);
+}
+
+function renderSelectionOverview(comparisons) {
+  const selected = comparisons.find(item => item.is_best === true);
+  if (!selected) {
+    return '<div class="selection-overview selection-none"><span class="selection-icon" aria-hidden="true">○</span><div><b>No hay una variante ganadora concluyente</b><span>Ninguna comparación favorable ha sido seleccionada.</span></div></div>';
   }
-  return null;
+  const variant = escapeHtml(selected.variant);
+  if (selected.selection_label === 'Ganadora') {
+    return `<div class="selection-overview selection-winner"><span class="selection-icon" aria-hidden="true">★</span><div><b>Variante ganadora: ${variant}</b><span>Cumple los criterios estadísticos del modelo.</span></div></div>`;
+  }
+  return `<div class="selection-overview selection-candidate"><span class="selection-icon" aria-hidden="true">◇</span><div><b>Mejor candidata: ${variant}, resultado todavía no concluyente</b><span>Es la mejor comparación favorable, pero no alcanza todos los criterios de ganadora.</span></div></div>`;
+}
+
+function summaryForVariant(summary, variant) {
+  return summary.find(row => String(row.variant || row.grupo_B_col || '') === String(variant)) || {};
+}
+
+function renderComparisonCards(comparisons, summary) {
+  const cards = comparisons.map(comparison => {
+    const row = summaryForVariant(summary, comparison.variant);
+    const metrics = comparison.metrics || {};
+    const classes = comparison.is_best
+      ? comparison.selection_label === 'Ganadora' ? 'comparison-winner' : 'comparison-candidate'
+      : comparison.comparison_status === 'Ganadora' ? 'comparison-conclusive' : 'comparison-neutral';
+    const badge = comparison.is_best
+      ? comparison.selection_label
+      : comparison.comparison_status === 'Ganadora' ? 'Resultado concluyente' : 'Sin ganador concluyente';
+    const visitsA = row.n_visitas_A ?? row.n_A;
+    const visitsVariant = row.n_visitas_B ?? row.n_B;
+    const conversionsA = row.conv_A;
+    const conversionsVariant = row.conv_B;
+    const detailItems = [];
+    if (finiteNumber(visitsA) !== null) detailItems.push(`<span><b>Observaciones A</b>${formatNumber(visitsA, 0)}</span>`);
+    if (finiteNumber(visitsVariant) !== null) detailItems.push(`<span><b>Observaciones ${escapeHtml(comparison.variant)}</b>${formatNumber(visitsVariant, 0)}</span>`);
+    if (finiteNumber(conversionsA) !== null) detailItems.push(`<span><b>Conversiones A</b>${formatNumber(conversionsA, 0)}</span>`);
+    if (finiteNumber(conversionsVariant) !== null) detailItems.push(`<span><b>Conversiones ${escapeHtml(comparison.variant)}</b>${formatNumber(conversionsVariant, 0)}</span>`);
+    if (finiteNumber(metrics.z_score) !== null) detailItems.push(`<span><b>Z-score</b>${formatNumber(metrics.z_score, 4)}</span>`);
+    if (finiteNumber(metrics.se_control) !== null) detailItems.push(`<span><b>EE control</b>${formatNumber(metrics.se_control, 4)}</span>`);
+    if (finiteNumber(metrics.se_variante) !== null) detailItems.push(`<span><b>EE variante</b>${formatNumber(metrics.se_variante, 4)}</span>`);
+    if (finiteNumber(metrics.se_diferencia) !== null) detailItems.push(`<span><b>EE diferencia</b>${formatNumber(metrics.se_diferencia, 4)}</span>`);
+    return `
+      <article class="comparison-card ${classes}" data-variant="${escapeHtml(comparison.variant)}" data-is-best="${comparison.is_best === true}">
+        <div class="comparison-card-header">
+          <div><span class="comparison-kicker">Comparación</span><h3>A vs ${escapeHtml(comparison.variant)}</h3></div>
+          <span class="comparison-badge">${escapeHtml(badge || 'Sin ganador concluyente')}</span>
+        </div>
+        <div class="comparison-core">
+          <div><span>Control A · tasa/media</span><strong>${formatRateOrMean(comparison.control_value)}</strong></div>
+          <div><span>Variante ${escapeHtml(comparison.variant)} · tasa/media</span><strong>${formatRateOrMean(comparison.variant_value)}</strong></div>
+          <div><span>Uplift</span><strong>${formatPercentValue(comparison.uplift_pct)}</strong></div>
+          <div><span>${evidenceLabel(comparison)}</span><strong>${evidenceValue(comparison)}</strong></div>
+        </div>
+        <div class="comparison-interval"><span>Intervalo ${escapeHtml((comparison.interval && comparison.interval.name) || '')}</span><strong>${formatInterval(comparison.interval)}</strong></div>
+        ${detailItems.length ? `<div class="comparison-details">${detailItems.join('')}</div>` : ''}
+      </article>`;
+  }).join('');
+  return `<section class="comparisons-section" aria-label="Comparaciones contra el control"><div class="comparisons-grid">${cards}</div></section>`;
 }
 
 function renderSummaryTab(out) {
   let html = '<h3>Resumen</h3>';
 
-  const excludeCols = ['ci_low', 'ci_high', 'ci_uplift_center_low', 'ci_uplift_center_high'];
-  const keys = Object.keys(out.summary[0]).filter(k => !excludeCols.includes(k));
+  const keys = [...new Set(out.summary.flatMap(row => Object.keys(row)))];
 
-  html += '<table class="data-table"><thead><tr>';
-  keys.forEach(k => { html += `<th>${k}</th>`; });
+  html += '<div class="table-scroll"><table class="data-table"><thead><tr>';
+  keys.forEach(k => { html += `<th>${escapeHtml(k)}</th>`; });
   html += '</tr></thead><tbody>';
 
   out.summary.forEach(row => {
     html += '<tr>';
     keys.forEach(k => {
       let val = row[k];
-      if (val === null || val === undefined) val = '';
+      if (val === null || val === undefined || (typeof val === 'number' && !Number.isFinite(val))) val = '—';
       else if (typeof val === 'number') val = val.toFixed(4);
-      html += `<td>${val}</td>`;
+      html += `<td>${escapeHtml(val)}</td>`;
     });
     html += '</tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   return html;
 }
 
 function renderConsoleTab(out) {
   let html = '<h3>Salida tipo consola</h3>';
-
-  const hasDia = out.summary.some(r => r.dia !== undefined && r.dia !== null);
-  const hasGrupo = out.summary.some(r => r.grupo !== undefined && r.grupo !== null);
-
-  if (hasDia && hasGrupo) {
-    html += renderBayesConsoleBlocks(out);
-  } else {
-    html += renderFreqConsoleBlocks(out);
-  }
-
-  return html;
-}
-
-function renderBayesConsoleBlocks(out) {
-  const summaries = out.summary;
-  const comparisons = out.comparisons || [];
-
-  const dias = [...new Set(summaries.map(r => r.dia))];
-
-  let blocks = [];
-
-  dias.forEach(dia => {
-    const rows = summaries.filter(r => String(r.dia) === String(dia));
-    rows.sort((a, b) => String(a.grupo).localeCompare(String(b.grupo)));
-
-    let lines = [];
-    lines.push('\uD83D\uDDD3\ufe0f  ' + dia);
-
-    const grupos = [];
-    rows.forEach(r => {
-      const g = String(r.grupo || '');
-      grupos.push(g);
-      const visitas = r.visitas ?? '';
-      const conv = r.conversiones ?? '';
-      const acumV = r.acum_visitas ?? '';
-      const acumC = r.acum_conversiones ?? '';
-      const media = r.media ?? '';
-      const ciLow = r.ci_low ?? '';
-      const ciHigh = r.ci_high ?? '';
-
-      lines.push('Grupo ' + g + ':');
-      lines.push('  \uD83D\uDCCA Acumulado: ' + acumV + ' visitas | ' + acumC + ' conversiones');
-      lines.push('  Visitas d\u00eda: ' + visitas + ' | Conversiones d\u00eda: ' + conv);
-      lines.push('  Media: ' + _pct(media));
-      lines.push('  IC 95%: [' + _pct(ciLow) + ', ' + _pct(ciHigh) + ']');
-    });
-
-    if (grupos.length >= 2) {
-      lines.push('');
-      const g1 = grupos[0];
-      const g2 = grupos[1];
-      const comp = _findComparison(comparisons, dia);
-      if (comp) {
-        [g1 + '_vs_' + g2, g2 + '_vs_' + g1].forEach(key => {
-          const stats = comp[key];
-          if (stats && typeof stats === 'object') {
-            const upliftMedia = parseFloat(stats.uplift_media || 0) * 100;
-            const probMejor = parseFloat(stats.prob_mejor || 0) * 100;
-            const ciCentered = stats.ci_centered;
-            const ciRight = stats.ci_right;
-            const ciLeft = stats.ci_left;
-
-            const fmtCent = ciCentered && ciCentered.length >= 2
-              ? '[' + (ciCentered[0] * 100).toFixed(2) + '%, ' + (ciCentered[1] * 100).toFixed(2) + '%]'
-              : '—';
-            const fmtRight = ciRight && ciRight.length >= 1
-              ? '> ' + (ciRight[0] * 100).toFixed(2) + '%'
-              : '—';
-            const fmtLeft = ciLeft && ciLeft.length >= 1
-              ? '< ' + (ciLeft[0] * 100).toFixed(2) + '%'
-              : '—';
-
-            lines.push('\uD83D\uDCC8 Uplift (relativo ' + key + '):');
-            lines.push('  Media estimada: ' + upliftMedia.toFixed(2) + '%');
-            lines.push('  ---------------------------------------------');
-            lines.push('  1. IC Centrado:   ' + fmtCent + ' (Est\u00e1ndar)');
-            lines.push('  2. IC Suelo:      ' + fmtRight + ' (M\u00ednimo asegurado 95%)');
-            lines.push('  3. IC Techo:      ' + fmtLeft + ' (M\u00e1ximo riesgo 95%)');
-            lines.push('  ---------------------------------------------');
-            lines.push('  Probabilidad de que ' + g1 + ' > ' + g2 + ': ' + probMejor.toFixed(2) + '%');
-          }
-        });
-      }
-    }
-
-    blocks.push(lines.join('\n'));
+  const blocks = out.comparisons.map(comparison => {
+    const row = summaryForVariant(out.summary, comparison.variant);
+    const metrics = comparison.metrics || {};
+    const lines = [
+      '==================================================',
+      `                 ANÁLISIS ${comparison.variant} vs A`,
+      '==================================================',
+      `Control A · tasa/media: ${formatRateOrMean(comparison.control_value)}`,
+      `Variante ${comparison.variant} · tasa/media: ${formatRateOrMean(comparison.variant_value)}`,
+    ];
+    const nA = row.n_visitas_A ?? row.n_A;
+    const nVariant = row.n_visitas_B ?? row.n_B;
+    if (finiteNumber(nA) !== null) lines.push(`Observaciones A: ${formatNumber(nA, 0)} | Observaciones ${comparison.variant}: ${formatNumber(nVariant, 0)}`);
+    if (finiteNumber(row.conv_A) !== null) lines.push(`Conversiones A: ${formatNumber(row.conv_A, 0)} | Conversiones ${comparison.variant}: ${formatNumber(row.conv_B, 0)}`);
+    lines.push('--------------------------------------------------');
+    lines.push(`UPLIFT: ${formatPercentValue(comparison.uplift_pct)}`);
+    lines.push(`${evidenceLabel(comparison).toUpperCase()}: ${evidenceValue(comparison)}`);
+    lines.push(`INTERVALO: ${formatInterval(comparison.interval)}`);
+    if (finiteNumber(metrics.z_score) !== null) lines.push(`Z-SCORE: ${formatNumber(metrics.z_score, 4)}`);
+    if (finiteNumber(metrics.se_control) !== null) lines.push(`ERROR ESTÁNDAR CONTROL: ${formatNumber(metrics.se_control, 4)}`);
+    if (finiteNumber(metrics.se_variante) !== null) lines.push(`ERROR ESTÁNDAR VARIANTE: ${formatNumber(metrics.se_variante, 4)}`);
+    if (finiteNumber(metrics.se_diferencia) !== null) lines.push(`ERROR ESTÁNDAR DIFERENCIA: ${formatNumber(metrics.se_diferencia, 4)}`);
+    lines.push(`ESTADO INDIVIDUAL: ${comparison.comparison_status || 'Sin ganador concluyente'}`);
+    if (comparison.is_best) lines.push(`DESTACADO PRINCIPAL: ${comparison.selection_label}`);
+    lines.push('==================================================');
+    return `<div class="code-block">${escapeHtml(lines.join('\n'))}</div>`;
   });
-
-  if (blocks.length === 0) {
-    return '<div class="code-block">No hay datos de consola disponibles.</div>';
-  }
-
-  return blocks.map(b => '<div class="code-block">' + b + '</div>').join('');
-}
-
-function renderFreqConsoleBlocks(out) {
-  const r = out.summary[0] || {};
-  const comparisons = out.comparisons || [];
-
-  const intervalType = window.State.freq_interval_type || 'centrado';
-
-  let lines = [];
-  lines.push('==================================================');
-  lines.push('           AN\u00c1LISIS DE PRECISI\u00d3N B vs A');
-  lines.push('==================================================');
-
-  const hasAggregated = r.n_visitas_A !== undefined;
-
-  if (hasAggregated) {
-    lines.push(
-      'Dise\u00f1o A             | Visitas: ' + String(parseInt(r.n_visitas_A) || 0).padStart(8) + ' | Convs: ' + String(parseInt(r.conv_A) || 0).padStart(6)
-    );
-    lines.push(
-      'Dise\u00f1o B             | Visitas: ' + String(parseInt(r.n_visitas_B) || 0).padStart(8) + ' | Convs: ' + String(parseInt(r.conv_B) || 0).padStart(6)
-    );
-  } else {
-    const ga = r.grupo_A_col || 'A';
-    const gb = r.grupo_B_col || 'B';
-    lines.push(
-      ga + ' (A): ' + String(parseInt(r.n_A) || 0) + ' filas | ' + String(parseFloat(r.conv_A) || 0) + ' convs | Media: ' + (parseFloat(r.media_A) || 0).toFixed(4)
-    );
-    lines.push(
-      gb + ' (B): ' + String(parseInt(r.n_B) || 0) + ' filas | ' + String(parseFloat(r.conv_B) || 0) + ' convs | Media: ' + (parseFloat(r.media_B) || 0).toFixed(4)
-    );
-  }
-
-  lines.push('--------------------------------------------------');
-
-  if (isPvalueEngine()) {
-    const z = parseFloat(r.z_stat || 0).toFixed(4);
-    const statLabel = window.State.session_id ? 'ESTADÍSTICO T (Welch)' : 'ESTADÍSTICO Z';
-    lines.push(statLabel + ': ' + z);
-
-    const interpretationMetrics = [r.z_score, r.se_control, r.se_variante, r.se_diferencia];
-    if (interpretationMetrics.every(value => Number.isFinite(parseFloat(value)))) {
-      lines.push('Z-SCORE (no combinado): ' + parseFloat(r.z_score).toFixed(4));
-      lines.push('ERROR ESTÁNDAR CONTROL: ' + parseFloat(r.se_control).toFixed(4));
-      lines.push('ERROR ESTÁNDAR VARIANTE: ' + parseFloat(r.se_variante).toFixed(4));
-      lines.push('ERROR ESTÁNDAR DIFERENCIA: ' + parseFloat(r.se_diferencia).toFixed(4));
-    }
-
-    if (intervalType === 'centrado') {
-      const pv = parseFloat(r.p_value_two !== undefined ? r.p_value_two : 1).toFixed(4);
-      lines.push('P-VALUE (dos colas): ' + pv);
-      lines.push(parseFloat(pv) < 0.05 ? '✓ SIGNIFICATIVO (p < 0.05)' : '✗ NO SIGNIFICATIVO (p ≥ 0.05)');
-    } else if (intervalType === 'derecha') {
-      const pv = parseFloat(r.p_value_right !== undefined ? r.p_value_right : 1).toFixed(4);
-      lines.push('P-VALUE (cola derecha, H₁: B > A): ' + pv);
-      lines.push(parseFloat(pv) < 0.05 ? '✓ SIGNIFICATIVO (p < 0.05)' : '✗ NO SIGNIFICATIVO (p ≥ 0.05)');
-    } else if (intervalType === 'izquierda') {
-      const pv = parseFloat(r.p_value_left !== undefined ? r.p_value_left : 1).toFixed(4);
-      lines.push('P-VALUE (cola izquierda, H₁: B < A): ' + pv);
-      lines.push(parseFloat(pv) < 0.05 ? '✓ SIGNIFICATIVO (p < 0.05)' : '✗ NO SIGNIFICATIVO (p ≥ 0.05)');
-    }
-  } else {
-    const significancia = parseFloat(r.precision_B_mejor || 0) * 100;
-    lines.push('NIVEL DE SIGNIFICANCIA DE QUE B > A: ' + significancia.toFixed(2) + '%');
-  }
-
-  if (intervalType === 'centrado') {
-    const low = r.ci_uplift_center_low;
-    const high = r.ci_uplift_center_high;
-    if (low !== undefined && high !== undefined) {
-      lines.push('IC CENTRADO (UPLIFT): [' + parseFloat(low).toFixed(2) + '%, ' + parseFloat(high).toFixed(2) + '%]');
-    } else {
-      lines.push('IC CENTRADO (UPLIFT): [—]');
-    }
-  } else if (intervalType === 'derecha') {
-    const val = r.ci_right_95_left;
-    if (val !== undefined) {
-      lines.push('COLA DERECHA (IC 95% IZQUIERDA): > ' + parseFloat(val).toFixed(2) + '%');
-    } else {
-      lines.push('COLA DERECHA (IC 95% IZQUIERDA): —');
-    }
-  } else if (intervalType === 'izquierda') {
-    const val = r.ci_left_95_right;
-    if (val !== undefined) {
-      lines.push('COLA IZQUIERDA (IC 95% DERECHA): < ' + parseFloat(val).toFixed(2) + '%');
-    } else {
-      lines.push('COLA IZQUIERDA (IC 95% DERECHA): —');
-    }
-  }
-
-  if (comparisons && comparisons.length > 0) {
-    comparisons.forEach(comp => {
-      lines.push('--------------------------------------------------');
-      Object.keys(comp).forEach(k => {
-        if (k === 'dia') return;
-        const v = comp[k];
-        if (typeof v === 'object' && v !== null) {
-          lines.push(k + ':');
-          Object.entries(v).forEach(([kk, vv]) => {
-            if (typeof vv === 'number') vv = (vv * 100).toFixed(2) + '%';
-            lines.push('  ' + kk + ': ' + vv);
-          });
-        }
-      });
-    });
-  }
-
-  lines.push('==================================================');
-
-  return '<div class="code-block">' + lines.join('\n') + '</div>';
+  return html + blocks.join('');
 }
 
 function renderLogTab(out) {
   if (out.log_text) {
-    const isAi = out.log_text.includes('IA') || out.log_text.includes('GPT') || out.log_text.includes('OpenAI');
-    return `<h3>${isAi ? 'Interpretaci\u00f3n IA' : 'Interpretaci\u00f3n / Log'}</h3>
-      <div class="code-block">${out.log_text}</div>`;
+    return `<section class="ai-interpretation"><div class="ai-heading"><span aria-hidden="true">IA</span><h3>Interpretación IA</h3></div>
+      <div class="code-block">${escapeHtml(out.log_text)}</div></section>`;
   }
   return '';
 }
@@ -794,7 +764,7 @@ function renderFiguresTab(out) {
 function renderPdfTab(out) {
   if (!out.pdf_bytes) return '';
   return `<h3>Reporte</h3>
-    <button class="btn-download" onclick="downloadPdf('${out.pdf_bytes}', 'reporte.pdf')">
+    <button class="btn-download" onclick="downloadPdf('${out.pdf_bytes}', 'reporte-multivariante.pdf')">
       📄 Descargar PDF
     </button>`;
 }

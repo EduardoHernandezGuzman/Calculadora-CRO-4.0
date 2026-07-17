@@ -14,7 +14,6 @@ import io
 import os
 import warnings
 from typing import Any, Dict, List, Optional, Tuple
-from itertools import combinations
 from collections import defaultdict
 
 import numpy as np
@@ -26,6 +25,13 @@ try:
 except Exception:
     st = None  # FastAPI app: streamlit es opcional
 from matplotlib.backends.backend_pdf import PdfPages
+
+from backend.core.experiment_groups import (
+    STATUS_WINNER,
+    detect_aggregate_groups,
+    make_comparison_record,
+    mark_best_comparison,
+)
 
 try:
     import pymc as pm  # noqa: F401
@@ -67,10 +73,11 @@ def interpretar_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None
                 f"IC95% (Tasa)=[{v['ci'][0]:.4f}, {v['ci'][1]:.4f}]"
             )
 
-        if "_vs_" in str(k) and isinstance(v, dict):
+        if str(k).startswith("A_vs_") and isinstance(v, dict):
+            variant = str(k).split("_vs_", 1)[1]
             comparativas.append(
                 f"COMPARATIVA {k}: \n"
-                f"- Probabilidad de que el primero sea mejor: {v['prob_mejor'] * 100:.2f}%\n"
+                f"- Probabilidad de que {variant} supere al control A: {v['prob_mejor'] * 100:.2f}%\n"
                 f"- Uplift Medio Estimado: {v['uplift_media'] * 100:.2f}%\n"
                 f"- IC Centrado 95%: "
                 f"[{v['ci_centered'][0] * 100:.2f}%, {v['ci_centered'][1] * 100:.2f}%]\n"
@@ -159,41 +166,46 @@ class ConversionBayesGamma:
             resultados[f"clicks_{grupo}"] = clicks
             resultados[f"tasa_{grupo}"] = (clicks / visitas) if visitas > 0 else 0.0
 
-        for g1, g2 in combinations(grupos, 2):
-            for a, b in [(g1, g2), (g2, g1)]:
-                tasa_a = muestras[a]
-                tasa_b = muestras[b]
+        control = "A"
+        control_samples = muestras[control]
+        for variant in grupos:
+            if variant == control:
+                continue
+            variant_samples = muestras[variant]
+            uplift = np.where(
+                control_samples != 0,
+                (variant_samples - control_samples) / control_samples,
+                0,
+            )
+            diff = variant_samples - control_samples
+            prob_mejor = float(np.mean(diff > 0))
 
-                uplift = np.where(tasa_b != 0, (tasa_a - tasa_b) / tasa_b, 0)
-                diff = tasa_a - tasa_b
-                prob_mejor = float(np.mean(diff > 0))
+            mean_uplift = float(np.mean(uplift))
+            std_uplift = float(np.std(uplift))
 
-                mean_uplift = float(np.mean(uplift))
-                std_uplift = float(np.std(uplift))
+            ci_centered = np.percentile(uplift, [2.5, 97.5])
+            ci_right = np.percentile(uplift, [5.0, 100.0])
+            ci_left = np.percentile(uplift, [0.0, 95.0])
 
-                ci_centered = np.percentile(uplift, [2.5, 97.5])
-                ci_right = np.percentile(uplift, [5.0, 100.0])
-                ci_left = np.percentile(uplift, [0.0, 95.0])
+            if mean_uplift > 0:
+                ci_unilateral = ci_right
+                tipo_ic = "Suelo (> 5%)"
+            else:
+                ci_unilateral = ci_left
+                tipo_ic = "Techo (< 95%)"
 
-                if mean_uplift > 0:
-                    ci_unilateral = ci_right
-                    tipo_ic = "Suelo (> 5%)"
-                else:
-                    ci_unilateral = ci_left
-                    tipo_ic = "Techo (< 95%)"
-
-                resultados[f"{a}_vs_{b}"] = {
-                    "uplift_media": mean_uplift,
-                    "uplift_std": std_uplift,
-                    "ci_centered": ci_centered,
-                    "ci_right": ci_right,
-                    "ci_left": ci_left,
-                    "uplift_ci": ci_unilateral,
-                    "tipo_ic": tipo_ic,
-                    "prob_mejor": prob_mejor,
-                    "ganador": a if prob_mejor >= 0.95 else None,
-                    "diff": diff,
-                }
+            resultados[f"A_vs_{variant}"] = {
+                "uplift_media": mean_uplift,
+                "uplift_std": std_uplift,
+                "ci_centered": ci_centered,
+                "ci_right": ci_right,
+                "ci_left": ci_left,
+                "uplift_ci": ci_unilateral,
+                "tipo_ic": tipo_ic,
+                "prob_mejor": prob_mejor,
+                "ganador": variant if prob_mejor >= 0.95 else None,
+                "diff": diff,
+            }
 
         self.historial.append(resultados)
 
@@ -249,31 +261,31 @@ class ConversionBayesGamma:
                 plt.show()
             plt.close(fig1)
 
-            comparaciones = [k for k in paso if "_vs_" in str(k)]
+            comparaciones = [k for k in paso if str(k).startswith("A_vs_")]
             for clave in comparaciones:
                 stats = paso[clave]
-                g1, g2 = clave.split("_vs_")
+                control, variant = clave.split("_vs_")
 
                 str_cent = f"[{stats['ci_centered'][0] * 100:.2f}%, {stats['ci_centered'][1] * 100:.2f}%]"
                 str_right = f"> {stats['ci_right'][0] * 100:.2f}%"
                 str_left = f"< {stats['ci_left'][1] * 100:.2f}%"
 
                 comp_lines = [
-                    f"\n📈 Uplift (relativo {g1} vs {g2}):",
+                    f"\n📈 Uplift ({variant} frente al control {control}):",
                     f"  Media estimada: {stats['uplift_media'] * 100:.2f}%",
                     f"  ------------------------------------------------",
                     f"  1. IC Centrado:   {str_cent}",
                     f"  2. IC Derecha:    {str_right} (Suelo 95%)",
                     f"  3. IC Izquierda:  {str_left} (Techo 95%)",
                     f"  ------------------------------------------------",
-                    f"  Probabilidad {g1} > {g2}: {stats['prob_mejor'] * 100:.2f}%",
+                    f"  Probabilidad {variant} > {control}: {stats['prob_mejor'] * 100:.2f}%",
                 ]
 
                 if stats.get("ganador"):
                     if dia_num is not None and dia_num < 6:
                         comp_lines += ["\n⚠️ *Atención:* Falta data (Día < 6)."]
                     else:
-                        comp_lines += [f"\n🏆 Resultado final: Ganador {g1}"]
+                        comp_lines += [f"\n🏆 Resultado final: Ganador {variant}"]
 
                 if pdf is not None:
                     fig_cmp_text = plt.figure(figsize=(8.27, 11.69))
@@ -299,13 +311,13 @@ class ConversionBayesGamma:
                 )
                 sns.kdeplot(
                     stats["diff"],
-                    label=f"Densidad ({g1} - {g2})",
+                    label=f"Densidad ({variant} - {control})",
                     fill=True,
                     color="green",
                     alpha=0.5,
                 )
                 plt.axvline(0, color="black", linestyle="--")
-                plt.title(f"{dia} - Diferencia CTR: {g1} - {g2}")
+                plt.title(f"{dia} - Diferencia CTR: {variant} - {control}")
                 plt.xlabel("Diferencia absoluta")
                 plt.legend()
 
@@ -370,20 +382,74 @@ def _build_summary_from_historial(historial: List[Dict[str, Any]]) -> pd.DataFra
     return pd.DataFrame.from_records(records)
 
 
+def _build_lightweight_comparisons(
+    paso: Dict[str, Any], variants: Tuple[str, ...]
+) -> List[Dict[str, Any]]:
+    comparisons = []
+    for variant in variants:
+        stats = paso[f"A_vs_{variant}"]
+        favorable = float(stats["uplift_media"]) > 0
+        significant = (
+            float(stats["prob_mejor"]) >= 0.95
+            and float(stats["ci_centered"][0]) > 0
+        )
+        comparisons.append(
+            make_comparison_record(
+                variant=variant,
+                control_value=float(paso["A"]["media"]),
+                variant_value=float(paso[variant]["media"]),
+                uplift_pct=float(stats["uplift_media"]) * 100,
+                difference=float(np.mean(stats["diff"])),
+                evidence_name="probability_superiority",
+                evidence_value=float(stats["prob_mejor"]),
+                interval_name="centered_95",
+                interval=[
+                    float(stats["ci_centered"][0]) * 100,
+                    float(stats["ci_centered"][1]) * 100,
+                ],
+                favorable=favorable,
+                significant=significant,
+                metrics={
+                    "uplift_std_pct": float(stats["uplift_std"]) * 100,
+                    "ci_floor_pct": [
+                        float(stats["ci_right"][0]) * 100,
+                        float(stats["ci_right"][1]) * 100,
+                    ],
+                    "ci_ceiling_pct": [
+                        float(stats["ci_left"][0]) * 100,
+                        float(stats["ci_left"][1]) * 100,
+                    ],
+                    "interval_type": stats["tipo_ic"],
+                },
+            )
+        )
+
+    winners = [
+        item for item in comparisons
+        if item["comparison_status"] == STATUS_WINNER
+    ]
+    candidates = winners or [item for item in comparisons if item["favorable"]]
+    if not candidates:
+        return mark_best_comparison(comparisons, None, winner=False)
+    best = max(candidates, key=lambda item: item["evidence"]["value"])
+    return mark_best_comparison(comparisons, best["variant"], winner=bool(winners))
+
+
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     config = config or {}
     num_samples = int(config.get("num_samples", 100000))
     generate_pdf = bool(config.get("generate_pdf", False))
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
+    layout = detect_aggregate_groups(df.columns)
 
     expected_priors = config.get("expected_priors")
     if not isinstance(expected_priors, dict) or not expected_priors:
         expected_priors = {"A": (0, 0), "B": (0, 0)}
 
     priors_gamma = _build_priors_from_expected(expected_priors)
-    if not priors_gamma:
-        priors_gamma = {"A": (1, 1), "B": (1, 1)}
+    for group in layout.groups:
+        priors_gamma.setdefault(group, (1, 1))
 
     modelo_gamma = ConversionBayesGamma(priors=priors_gamma)
 
@@ -405,6 +471,11 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         figs = modelo_gamma.mostrar_resultados_con_graficos(pdf=None, show=False)
 
     summary = _build_summary_from_historial(modelo_gamma.historial)
+    comparisons = (
+        _build_lightweight_comparisons(modelo_gamma.historial[-1], layout.variants)
+        if modelo_gamma.historial
+        else []
+    )
 
     ai_text: Optional[str] = None
     if include_ai and modelo_gamma.historial:
@@ -418,7 +489,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         "figures": figs,
         "pdf_bytes": pdf_bytes,
         "log_text": ai_text,
-        "comparisons": modelo_gamma.historial,
+        "comparisons": comparisons,
     }
 
 
