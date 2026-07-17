@@ -192,9 +192,22 @@ FastAPI expone los siguientes endpoints:
 |---|---|
 | `file` | Archivo CSV |
 | `engine_key` | Identificador devuelto por `/api/engines` |
-| `config` | JSON con opciones como `generate_pdf`, `include_ai` y `openai_api_key` |
+| `config` | JSON con las opciones de ejecución |
+
+Opciones principales de `config`:
+
+| Opción | Descripción |
+|---|---|
+| `generate_pdf` | Genera el PDF cuando es `true` |
+| `include_ai` | Solicita una única interpretación conjunta cuando es `true` |
+| `openai_api_key` | Clave opcional para la interpretación con IA |
+| `num_samples` | Número de muestras para motores bayesianos |
+| `n_iteraciones` | Número de iteraciones para Bootstrap |
+| `freq_interval_type` | Contraste frecuentista: `centrado`, `derecha` o `izquierda` |
 
 La respuesta puede incluir `summary`, `figures`, `pdf_bytes`, `log_text` y `comparisons`.
+
+`comparisons` contiene un registro ligero y serializable por cada A vs variante, con tasas o medias, uplift, evidencia, intervalo, estado estadístico, `selection_label` e `is_best`. Como máximo un registro puede tener `is_best=true`.
 
 ## Arquitectura
 
@@ -208,4 +221,6 @@ frontend/
 ├── css/                 # Estilos
 ├── js/                  # Wizard, cliente API y calculadora
 └── index.html            # SPA servida por FastAPI
+examples/                 # CSV sintéticos de ejemplo
+tests/                    # Tests unittest y smoke tests frontend
 ```
