@@ -7,7 +7,7 @@ import os
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.api.schemas import AnalyzeResponse, EngineInfo
 from backend.core.engine_router import (
@@ -23,8 +23,22 @@ from backend.core.engine_router import (
     get_engine_label,
     run_engine,
 )
+from backend.core.srm import calculate_srm
 
 router = APIRouter()
+
+_SESSION_ENGINES = {
+    ENGINE_0_1_SID,
+    ENGINE_0_INF_SID,
+    ENGINE_FREQ_SID,
+    ENGINE_FREQ_PVALUE_SID,
+}
+_NO_SESSION_ENGINES = {
+    ENGINE_0_1_NO_SID,
+    ENGINE_0_INF_NO_SID,
+    ENGINE_FREQ_NO_SID,
+    ENGINE_FREQ_PVALUE_NO_SID,
+}
 
 
 def _convert_numpy(obj):
@@ -106,6 +120,12 @@ async def analyze(
     if "generate_pdf" in config_dict:
         config_dict["generate_pdf"] = str(config_dict.get("generate_pdf", "false")).lower() in ("true", "1", "yes")
 
+    try:
+        session_id = _resolve_session_id(engine_key, config_dict)
+        srm_result = calculate_srm(df, session_id=session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     out = run_engine(engine_key, df, config_dict)
 
     summary_list = None
@@ -136,4 +156,27 @@ async def analyze(
         pdf_bytes=pdf_b64,
         log_text=out.log_text,
         comparisons=comparisons_clean,
+        srm=srm_result,
     )
+
+
+def _resolve_session_id(engine_key: str, config: dict) -> bool:
+    engine_session_id = None
+    if engine_key in _SESSION_ENGINES:
+        engine_session_id = True
+    elif engine_key in _NO_SESSION_ENGINES:
+        engine_session_id = False
+
+    if "session_id" not in config:
+        if engine_session_id is None:
+            raise ValueError("No se puede determinar si el motor utiliza Session ID.")
+        return engine_session_id
+
+    configured = config["session_id"]
+    if not isinstance(configured, bool):
+        raise ValueError("config.session_id debe ser true o false.")
+    if engine_session_id is not None and configured != engine_session_id:
+        raise ValueError(
+            "config.session_id contradice la unidad de análisis del motor seleccionado."
+        )
+    return configured

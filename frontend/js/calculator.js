@@ -362,6 +362,7 @@ function buildAnalysisConfig() {
     generate_pdf: generatePdf,
     include_ai: includeAi,
     openai_api_key: openaiApiKey,
+    session_id: Boolean(window.State.session_id),
   };
 
   if (window.State.enfoque === 'bayesiano') {
@@ -525,6 +526,7 @@ function displayResults(out) {
   const container = document.getElementById('results-container');
   let html = '<div class="section-spacer"></div><hr><div class="section-spacer"></div>';
   html += '<h2 class="main-header">Resultados</h2>';
+  html += renderSrmBanner(out.srm);
 
   const comparisons = Array.isArray(out.comparisons) ? out.comparisons : [];
   const best = comparisons.filter(item => item && item.is_best === true);
@@ -582,6 +584,38 @@ function displayResults(out) {
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+}
+
+function formatSrmPValue(value) {
+  const number = finiteNumber(value);
+  if (number === null) return '—';
+  if (number > 0 && number < 0.000001) return number.toExponential(2);
+  return number.toFixed(6);
+}
+
+function renderSrmBanner(srm) {
+  if (!srm || typeof srm !== 'object') {
+    return `
+      <section class="srm-banner srm-unavailable" role="status" aria-label="Chequeo SRM no disponible">
+        <span class="srm-icon" aria-hidden="true">?</span>
+        <div><h3>Chequeo SRM no disponible</h3><p>Esta respuesta no incluye información sobre el reparto de la muestra.</p></div>
+      </section>`;
+  }
+
+  const hasSrm = srm.has_srm === true;
+  const title = hasSrm ? 'Se detecta SRM' : 'No se detecta SRM';
+  const description = hasSrm
+    ? 'La distribución de la muestra difiere significativamente del reparto esperado. Revisa la asignación, el tracking y la implementación antes de interpretar los resultados.'
+    : 'El reparto observado de la muestra es compatible con el reparto esperado.';
+  return `
+    <section class="srm-banner ${hasSrm ? 'srm-detected' : 'srm-clear'}" role="status" aria-label="${title}">
+      <span class="srm-icon" aria-hidden="true">${hasSrm ? '!' : '✓'}</span>
+      <div>
+        <h3>${title}</h3>
+        <p>${description}</p>
+        <div class="srm-metrics"><span>p-value SRM: <b>${formatSrmPValue(srm.p_value)}</b></span><span>alpha: <b>${formatNumber(srm.alpha, 4)}</b></span></div>
+      </div>
+    </section>`;
 }
 
 function finiteNumber(value) {

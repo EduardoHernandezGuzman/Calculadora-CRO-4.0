@@ -147,12 +147,21 @@ context.output = {
   log_text: 'Interpretación conjunta de IA',
   figures: ['figura-1', 'figura-2', 'figura-3', 'figura-4'],
   pdf_bytes: 'YWJj',
+  srm: { has_srm: false, p_value: 0.42, alpha: 0.01 },
 };
 evaluate('displayResults(output)');
 const rendered = elements['results-container'].innerHTML;
+if (!rendered.includes('No se detecta SRM')) throw new Error('Falta el banner SRM verde.');
+if ((rendered.match(/class="srm-banner/g) || []).length !== 1) throw new Error('El banner SRM aparece más de una vez.');
+if (rendered.indexOf('No se detecta SRM') > rendered.indexOf('Variante ganadora')) throw new Error('Orden visual SRM incorrecto.');
 if (rendered.indexOf('Interpretación IA') > rendered.indexOf('Resumen')) throw new Error('IA aparece demasiado tarde.');
 if ((rendered.match(/data:image\/png;base64/g) || []).length !== 4) throw new Error('No se renderizan todas las figuras.');
 if (!rendered.includes('reporte-multivariante.pdf')) throw new Error('PDF no descargable.');
+
+context.redSrm = { has_srm: true, p_value: 0.0000000123, alpha: 0.01 };
+const redBanner = evaluate('renderSrmBanner(redSrm)');
+if (!redBanner.includes('Se detecta SRM') || !redBanner.includes('1.23e-8')) throw new Error('Banner SRM rojo o p-value científico incorrecto.');
+if (!evaluate('renderSrmBanner(null)').includes('Chequeo SRM no disponible')) throw new Error('Una respuesta antigua sin SRM rompe el frontend.');
 
 element('chk-pdf').checked = false;
 element('chk-ai').checked = false;
@@ -161,6 +170,7 @@ context.window.State.enfoque = 'frecuentista';
 context.window.State.freq_interval_type = 'izquierda';
 const config = evaluate('buildAnalysisConfig()');
 if (config.freq_interval_type !== 'izquierda') throw new Error('freq_interval_type no se transporta.');
+if (config.session_id !== true) throw new Error('session_id no se transporta.');
 
 const css = fs.readFileSync('frontend/css/styles.css', 'utf8');
 if (!css.includes('@media (max-width: 700px)') || !css.includes('.comparisons-grid')) {

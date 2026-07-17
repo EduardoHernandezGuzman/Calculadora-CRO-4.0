@@ -147,6 +147,19 @@ La calculadora no aplica Bonferroni, Holm, FDR ni otra corrección por comparaci
 
 Al analizar varias variantes aumenta el riesgo global de falsos positivos. Los resultados deben interpretarse teniendo en cuenta el número de comparaciones y el coste de una decisión incorrecta.
 
+### Chequeo SRM
+
+Cada análisis incluye un chequeo global SRM (Sample Ratio Mismatch) independiente del motor estadístico. SRM comprueba mediante chi-cuadrado si el reparto de muestra entre todos los grupos detectados coincide con el reparto esperado; no mide diferencias de conversión.
+
+En esta versión el reparto esperado es uniforme y se utiliza `alpha = 0.01`. Se muestra “Se detecta SRM” únicamente cuando `p_value < alpha`. El aviso es informativo: no bloquea ni modifica el análisis, las comparaciones o la selección de variante.
+
+- Sin Session ID, la muestra es la suma de `Visitas X`.
+- Con Session ID, la muestra es el número de valores no nulos en `Conversiones X` o en las columnas heredadas `A`, `B`, etc.
+- Los valores cero cuentan como observaciones y los `NaN` no se cuentan.
+- No se deduplican valores de `SessionID`; cada fila se considera una observación.
+
+SRM todavía no se incluye en los prompts de IA ni en el PDF. Una futura versión podría incorporar ratios esperadas configurables y añadir el resultado a esos informes sin cambiar los cálculos de los motores.
+
 ## Archivos de ejemplo
 
 - `examples/bayes_sin_session_abc.csv`
@@ -205,9 +218,27 @@ Opciones principales de `config`:
 | `n_iteraciones` | Número de iteraciones para Bootstrap |
 | `freq_interval_type` | Contraste frecuentista: `centrado`, `derecha` o `izquierda` |
 
-La respuesta puede incluir `summary`, `figures`, `pdf_bytes`, `log_text` y `comparisons`.
+La respuesta puede incluir `summary`, `figures`, `pdf_bytes`, `log_text`, `comparisons` y `srm`.
 
 `comparisons` contiene un registro ligero y serializable por cada A vs variante, con tasas o medias, uplift, evidencia, intervalo, estado estadístico, `selection_label` e `is_best`. Como máximo un registro puede tener `is_best=true`.
+
+`srm` contiene el resultado global del reparto de muestra:
+
+```json
+{
+  "has_srm": false,
+  "alpha": 0.01,
+  "chi2": 0.0,
+  "p_value": 1.0,
+  "degrees_of_freedom": 1,
+  "total_sample": 20000,
+  "groups": ["A", "B"],
+  "sample_counts": {"A": 10000, "B": 10000},
+  "expected_counts": {"A": 10000.0, "B": 10000.0},
+  "expected_ratios": {"A": 0.5, "B": 0.5},
+  "observed_ratios": {"A": 0.5, "B": 0.5}
+}
+```
 
 ## Arquitectura
 

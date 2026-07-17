@@ -18,3 +18,4 @@ class AnalyzeResponse(BaseModel):
     pdf_bytes: Optional[str] = None
     log_text: Optional[str] = None
     comparisons: Optional[List[Dict[str, Any]]] = None
+    srm: Optional[Dict[str, Any]] = None
