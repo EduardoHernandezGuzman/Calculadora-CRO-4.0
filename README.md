@@ -70,6 +70,31 @@ pip install -r requirements.txt
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### Despliegue en Render
+
+El repositorio incluye [`render.yaml`](render.yaml) para desplegar el backend y el frontend como un único Web Service. La configuración utiliza Python 3.13.5 y el backend no interactivo `Agg` de Matplotlib.
+
+Configuración equivalente para crear el servicio manualmente desde el panel de Render:
+
+- **Runtime:** `Python 3`
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- **Health Check Path:** `/api/health`
+- **Instance Type:** `Free`
+
+Variables de entorno:
+
+| Variable | Valor | Obligatoria |
+|---|---|---|
+| `PYTHON_VERSION` | `3.13.5` | Sí |
+| `MPLBACKEND` | `Agg` | Sí |
+| `MPLCONFIGDIR` | `/tmp/matplotlib` | Recomendada |
+| `OPENAI_API_KEY` | Secreto configurado en Render | Solo para interpretación con IA |
+
+No guardes el valor de `OPENAI_API_KEY` en el repositorio. Si no se configura, los análisis siguen funcionando con la interpretación de IA desactivada.
+
+El sistema de archivos de las instancias gratuitas de Render es efímero. Esta aplicación procesa CSV, gráficos y PDF en memoria y no necesita almacenamiento persistente. Las instancias gratuitas pueden suspenderse tras periodos de inactividad, por lo que la primera petición posterior puede tardar más en responder.
+
 ## Formatos de entrada
 
 El formato depende de la unidad de análisis seleccionada. Los nombres de las columnas distinguen mayúsculas, espacios y tildes.
