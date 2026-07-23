@@ -13,7 +13,12 @@ const context = {
       selected_engine_key: 'bayes_0_1_no_sid',
     },
   },
-  document: { getElementById: id => elements[id] || null },
+  document: {
+    getElementById: id => elements[id] || null,
+    createElement: () => element(''),
+    documentElement: { clientWidth: 1200 },
+    body: { appendChild: child => { elements[child.id] = child; } },
+  },
   $$: () => [],
   showError: () => {},
   showSuccess: () => {},
@@ -27,13 +32,24 @@ vm.runInContext(fs.readFileSync('frontend/js/calculator.js', 'utf8'), context);
 const evaluate = expression => vm.runInContext(expression, context);
 
 function element(id, value = '') {
+  const classes = new Set();
   elements[id] = {
     value,
     checked: false,
     innerHTML: '',
+    textContent: '',
+    dataset: {},
+    attributes: {},
     style: {},
     addEventListener() {},
-    classList: { add() {}, remove() {}, toggle() {} },
+    setAttribute(name, attributeValue) { this.attributes[name] = attributeValue; },
+    getBoundingClientRect() { return { left: 100, top: 100, right: 120, bottom: 120, width: 20, height: 20 }; },
+    classList: {
+      add(name) { classes.add(name); },
+      remove(name) { classes.delete(name); },
+      toggle(name) { classes.has(name) ? classes.delete(name) : classes.add(name); },
+      contains(name) { return classes.has(name); },
+    },
   };
   return elements[id];
 }
@@ -190,6 +206,27 @@ if (!cards.includes('A vs B') || !cards.includes('A vs E')) throw new Error('Fal
 if (!cards.includes('> 1.20%') || !cards.includes('< -1.40%')) throw new Error('Intervalos null incorrectos.');
 if (/\b(null|NaN|undefined)\b/.test(cards)) throw new Error('Se muestran valores técnicos vacíos.');
 if (!cards.includes('Resultado concluyente')) throw new Error('Falta el estado concluyente no seleccionado.');
+const tooltipText = 'Indica la probabilidad de que la diferencia observada entre las variantes no se debe al azar. Un p-value inferior al nivel de significancia (0,05 en este caso) sugiere que la diferencia observada es estadísticamente significativa.';
+if (!cards.includes(`data-tooltip="${tooltipText}"`) || !cards.includes('onmouseenter="showEvidenceTooltip(event)"') || !cards.includes('onfocus="showEvidenceTooltip(event)"')) {
+  throw new Error('Tooltip de p-value incompleto o no accesible mediante teclado.');
+}
+context.tooltipTrigger = element('tooltip-trigger');
+context.tooltipTrigger.dataset.tooltip = tooltipText;
+evaluate('showEvidenceTooltip({ currentTarget: tooltipTrigger })');
+const tooltipPopover = elements['evidence-tooltip-popover'];
+if (!tooltipPopover || !tooltipPopover.classList.contains('visible') || tooltipPopover.textContent !== tooltipText) {
+  throw new Error('El tooltip no se abre al pasar el ratón por el icono.');
+}
+evaluate('hideEvidenceTooltip({ currentTarget: tooltipTrigger })');
+if (tooltipPopover.classList.contains('visible')) throw new Error('El tooltip no se cierra al retirar el ratón.');
+context.nonPvalueComparisons = [
+  comparison('B', { evidenceName: 'probability_superiority' }),
+  comparison('C', { evidenceName: 'level_of_significance' }),
+];
+const nonPvalueCards = evaluate('renderComparisonCards(nonPvalueComparisons, [])');
+if (nonPvalueCards.includes('evidence-tooltip-trigger') || nonPvalueCards.includes(tooltipText)) {
+  throw new Error('El tooltip aparece en Bayesiano o Bootstrap.');
+}
 
 context.candidate = [comparison('B'), comparison('C', { isBest: true, selectionLabel: 'Mejor candidata' })];
 if (!evaluate('renderSelectionOverview(candidate)').includes('Mejor candidata: C')) throw new Error('Mejor candidata incorrecta.');
@@ -233,6 +270,9 @@ if (config.session_id !== true) throw new Error('session_id no se transporta.');
 const css = fs.readFileSync('frontend/css/styles.css', 'utf8');
 if (!css.includes('@media (max-width: 700px)') || !css.includes('.comparisons-grid')) {
   throw new Error('Falta soporte responsive básico.');
+}
+if (!css.includes('.evidence-tooltip-popover.visible') || !css.includes('position: fixed') || !css.includes('calc(100vw - 3rem)')) {
+  throw new Error('El tooltip no cubre ratón, teclado y ancho móvil.');
 }
 
 console.log('Frontend multivariante: smoke tests correctos.');

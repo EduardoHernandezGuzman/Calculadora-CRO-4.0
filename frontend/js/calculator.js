@@ -688,6 +688,66 @@ function evidenceLabel(comparison) {
   return 'p-value';
 }
 
+const P_VALUE_TOOLTIP_TEXT = 'Indica la probabilidad de que la diferencia observada entre las variantes no se debe al azar. Un p-value inferior al nivel de significancia (0,05 en este caso) sugiere que la diferencia observada es estadísticamente significativa.';
+
+function renderEvidenceLabel(comparison, index) {
+  const label = evidenceLabel(comparison);
+  if (!comparison.evidence || comparison.evidence.name !== 'p_value') return label;
+
+  return `<span class="evidence-label">${label}<span class="evidence-tooltip">
+    <button type="button" class="evidence-tooltip-trigger" aria-label="Información sobre p-value: ${P_VALUE_TOOLTIP_TEXT}" aria-describedby="evidence-tooltip-popover" aria-expanded="false" data-tooltip="${P_VALUE_TOOLTIP_TEXT}" onmouseenter="showEvidenceTooltip(event)" onmouseleave="hideEvidenceTooltip(event)" onfocus="showEvidenceTooltip(event)" onblur="hideEvidenceTooltip(event)" onclick="toggleEvidenceTooltip(event)">i</button>
+  </span></span>`;
+}
+
+function getEvidenceTooltipPopover() {
+  let tooltip = document.getElementById('evidence-tooltip-popover');
+  if (tooltip) return tooltip;
+
+  tooltip = document.createElement('div');
+  tooltip.id = 'evidence-tooltip-popover';
+  tooltip.className = 'evidence-tooltip-popover';
+  tooltip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function positionEvidenceTooltip(trigger, tooltip) {
+  const triggerRect = trigger.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth;
+  let left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
+  left = Math.max(8, Math.min(left, viewportWidth - tooltipRect.width - 8));
+  let top = triggerRect.top - tooltipRect.height - 10;
+  if (top < 8) top = triggerRect.bottom + 10;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function showEvidenceTooltip(event) {
+  const trigger = event.currentTarget;
+  const tooltip = getEvidenceTooltipPopover();
+  tooltip.textContent = trigger.dataset.tooltip;
+  tooltip.classList.add('visible');
+  trigger.setAttribute('aria-expanded', 'true');
+  positionEvidenceTooltip(trigger, tooltip);
+}
+
+function hideEvidenceTooltip(event) {
+  const tooltip = document.getElementById('evidence-tooltip-popover');
+  if (tooltip) tooltip.classList.remove('visible');
+  if (event && event.currentTarget) event.currentTarget.setAttribute('aria-expanded', 'false');
+}
+
+function toggleEvidenceTooltip(event) {
+  event.preventDefault();
+  const tooltip = document.getElementById('evidence-tooltip-popover');
+  if (tooltip && tooltip.classList.contains('visible')) {
+    hideEvidenceTooltip(event);
+  } else {
+    showEvidenceTooltip(event);
+  }
+}
+
 function evidenceValue(comparison) {
   const name = comparison.evidence && comparison.evidence.name;
   const value = comparison.evidence && comparison.evidence.value;
@@ -711,7 +771,7 @@ function summaryForVariant(summary, variant) {
 }
 
 function renderComparisonCards(comparisons, summary) {
-  const cards = comparisons.map(comparison => {
+  const cards = comparisons.map((comparison, index) => {
     const row = summaryForVariant(summary, comparison.variant);
     const metrics = comparison.metrics || {};
     const classes = comparison.is_best
@@ -743,7 +803,7 @@ function renderComparisonCards(comparisons, summary) {
           <div><span>Control A · tasa/media</span><strong>${formatRateOrMean(comparison.control_value)}</strong></div>
           <div><span>Variante ${escapeHtml(comparison.variant)} · tasa/media</span><strong>${formatRateOrMean(comparison.variant_value)}</strong></div>
           <div><span>Uplift</span><strong>${formatPercentValue(comparison.uplift_pct)}</strong></div>
-          <div><span>${evidenceLabel(comparison)}</span><strong>${evidenceValue(comparison)}</strong></div>
+          <div><span>${renderEvidenceLabel(comparison, index)}</span><strong>${evidenceValue(comparison)}</strong></div>
         </div>
         <div class="comparison-interval"><span>Intervalo ${escapeHtml((comparison.interval && comparison.interval.name) || '')}</span><strong>${formatInterval(comparison.interval)}</strong></div>
         ${detailItems.length ? `<div class="comparison-details">${detailItems.join('')}</div>` : ''}

@@ -737,6 +737,65 @@ body {
   font-size: 1.05rem;
 }
 
+.comparison-core .evidence-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.comparison-core .evidence-tooltip {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.evidence-tooltip-trigger {
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+}
+
+.evidence-tooltip-trigger:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.evidence-tooltip-popover {
+  position: fixed;
+  z-index: 10000;
+  width: min(20rem, calc(100vw - 3rem));
+  box-sizing: border-box;
+  padding: 0.7rem 0.8rem;
+  border-radius: 7px;
+  background: #172033;
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.evidence-tooltip-popover.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
 .comparison-interval {
   display: flex;
   justify-content: space-between;
