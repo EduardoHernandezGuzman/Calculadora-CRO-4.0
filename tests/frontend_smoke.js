@@ -69,9 +69,38 @@ element('calculator-main');
 element('csv-file-input');
 element('upload-zone');
 evaluate('renderCalculatorMain()');
-if (!elements['calculator-main'].innerHTML.includes('Introducir datos manualmente')) {
+const bayesNoSidHtml = elements['calculator-main'].innerHTML;
+if (!bayesNoSidHtml.includes('Cargar CSV') || !bayesNoSidHtml.includes('Introducir datos manualmente')) {
   throw new Error('La entrada manual no aparece en Bayesiano.');
 }
+
+context.window.State.session_id = true;
+evaluate('renderCalculatorMain()');
+const bayesSidHtml = elements['calculator-main'].innerHTML;
+if (!bayesSidHtml.includes('Cargar CSV') || !bayesSidHtml.includes('Introducir datos manualmente')) {
+  throw new Error('CSV y entrada manual no aparecen en Bayesiano con Session ID.');
+}
+
+for (const enfoque of ['frecuentista', 'freq_pvalue']) {
+  for (const sessionId of [false, true]) {
+    context.window.State.enfoque = enfoque;
+    context.window.State.session_id = sessionId;
+    evaluate('renderCalculatorMain()');
+    const frequentistHtml = elements['calculator-main'].innerHTML;
+    if (frequentistHtml.includes('Cargar CSV') || frequentistHtml.includes('method-csv') || frequentistHtml.includes('upload-zone')) {
+      throw new Error(`La carga CSV aparece en ${enfoque} con session_id=${sessionId}.`);
+    }
+    if (!frequentistHtml.includes('id="method-manual"') || frequentistHtml.includes('id="method-manual" style="display:none;"')) {
+      throw new Error(`La entrada manual no aparece directamente en ${enfoque} con session_id=${sessionId}.`);
+    }
+  }
+}
+
+context.window.State.enfoque = 'frecuentista';
+evaluate("selectInputMethod('csv')");
+evaluate('resetData()');
+context.window.State.enfoque = 'bayesiano';
+context.window.State.session_id = false;
 
 for (const group of 'ABCDE') {
   element(`manual-${group.toLowerCase()}-visitas`);

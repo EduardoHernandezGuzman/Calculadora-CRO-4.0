@@ -176,8 +176,9 @@ function renderFreqConfig() {
 
 function renderCalculatorMain() {
   const main = document.getElementById('calculator-main');
+  const allowsCsv = window.State.enfoque === 'bayesiano';
 
-  const csvPanel = `
+  const csvPanel = allowsCsv ? `
     <div id="method-csv">
       <p class="sub-header">Cargar datos desde CSV</p>
       <div class="hint-row">
@@ -195,21 +196,25 @@ function renderCalculatorMain() {
       </div>
       <div id="csv-preview"></div>
     </div>
-  `;
+  ` : '';
+
+  const introText = allowsCsv
+    ? 'Sube un archivo CSV con el formato indicado o introduce los datos manualmente para analizar tu test A/B.'
+    : 'Introduce los datos manualmente para analizar tu test A/B.';
 
   main.innerHTML = `
     <h2 class="main-header">Calculadora para Tests A/B</h2>
     <div class="info-box">
-      Esta herramienta te permite analizar los resultados de tus tests A/B usando modelos estad&iacute;sticos bayesianos o frecuentistas. Adem&aacute;s, te ayudaremos a la interpretaci&oacute;n de los resultados mediante Inteligencia Artificial. Sube un archivo CSV con el formato indicado y analiza tu test A/B.
+      Esta herramienta te permite analizar los resultados de tus tests A/B usando modelos estad&iacute;sticos bayesianos o frecuentistas. Adem&aacute;s, te ayudaremos a la interpretaci&oacute;n de los resultados mediante Inteligencia Artificial. ${introText}
     </div>
     <div class="section-spacer"></div>
-    ${renderInputMethodTabs()}
+    ${allowsCsv ? renderInputMethodTabs() : ''}
     ${csvPanel}
-    ${renderManualEntryPanel()}
+    ${renderManualEntryPanel(!allowsCsv)}
     <div id="results-container"></div>
   `;
 
-  setupFileUpload();
+  if (allowsCsv) setupFileUpload();
 }
 
 function renderInputMethodTabs() {
@@ -221,7 +226,7 @@ function renderInputMethodTabs() {
   `;
 }
 
-function renderManualEntryPanel() {
+function renderManualEntryPanel(isVisible = false) {
   const groups = ['A', 'B', 'C', 'D', 'E'];
   const cards = groups.map(group => `
     <div class="manual-entry-group ${group === 'A' ? 'manual-control' : ''}">
@@ -233,7 +238,7 @@ function renderManualEntryPanel() {
     </div>
   `).join('');
   return `
-    <div id="method-manual" style="display:none;">
+    <div id="method-manual"${isVisible ? '' : ' style="display:none;"'}>
       <p class="sub-header">Introducir datos manualmente</p>
       <div class="hint-row">
         <span style="font-size:18px;">✍️</span>
@@ -251,18 +256,20 @@ function renderManualEntryPanel() {
 }
 
 function selectInputMethod(method) {
+  if (window.State.enfoque !== 'bayesiano') method = 'manual';
   const csv = document.getElementById('method-csv');
   const manual = document.getElementById('method-manual');
   const tabCsv = document.getElementById('tab-method-csv');
   const tabManual = document.getElementById('tab-method-manual');
   const isManual = method === 'manual';
 
-  csv.style.display = isManual ? 'none' : '';
-  manual.style.display = isManual ? '' : 'none';
-  tabCsv.classList.toggle('active', !isManual);
-  tabManual.classList.toggle('active', isManual);
+  if (csv) csv.style.display = isManual ? 'none' : '';
+  if (manual) manual.style.display = isManual ? '' : 'none';
+  if (tabCsv) tabCsv.classList.toggle('active', !isManual);
+  if (tabManual) tabManual.classList.toggle('active', isManual);
 
-  document.getElementById('results-container').innerHTML = '';
+  const results = document.getElementById('results-container');
+  if (results) results.innerHTML = '';
 }
 
 let uploadedCsvFile = null;
@@ -822,7 +829,9 @@ function resetData() {
   window.State.datos_procesados = false;
   uploadedCsvFile = null;
   uploadedCsvData = null;
-  document.getElementById('csv-preview').innerHTML = '';
-  document.getElementById('results-container').innerHTML = '';
+  const csvPreview = document.getElementById('csv-preview');
+  const results = document.getElementById('results-container');
+  if (csvPreview) csvPreview.innerHTML = '';
+  if (results) results.innerHTML = '';
   showSuccess('Reiniciado correctamente');
 }
