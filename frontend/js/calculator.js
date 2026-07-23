@@ -56,7 +56,7 @@ function renderModelExpander(enfoque) {
 
   return `
     <div class="expander">
-      <div class="expander-header">Modelo Estad&iacute;stico <span class="arrow">&#9660;</span></div>
+      <div class="expander-header">Enfoque Estad&iacute;stico <span class="arrow">&#9660;</span></div>
       <div class="expander-body">
         <div class="dd-value">${modelTxt}</div>
         ${desc}
