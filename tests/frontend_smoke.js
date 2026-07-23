@@ -41,7 +41,9 @@ function element(id, value = '') {
     dataset: {},
     attributes: {},
     style: {},
+    scrollOptions: null,
     addEventListener() {},
+    scrollIntoView(options) { this.scrollOptions = options; },
     setAttribute(name, attributeValue) { this.attributes[name] = attributeValue; },
     getBoundingClientRect() { return { left: 100, top: 100, right: 120, bottom: 120, width: 20, height: 20 }; },
     classList: {
@@ -236,6 +238,14 @@ if (!evaluate('renderSelectionOverview(noCandidate)').includes('No hay una varia
 }
 
 element('results-container');
+evaluate('scrollToResults()');
+if (elements['results-container'].scrollOptions?.behavior !== 'smooth') {
+  throw new Error('El scroll a resultados no utiliza comportamiento suave.');
+}
+const manualAnalysisSource = evaluate('runManualAnalysis.toString()');
+if (!manualAnalysisSource.includes('if (analysisSucceeded) scrollToResults()')) {
+  throw new Error('La entrada manual no limita el scroll a análisis completados correctamente.');
+}
 context.output = {
   comparisons: context.comparisons,
   summary: context.summary,

@@ -414,10 +414,17 @@ async function analyzeFile(file, engineKey) {
     window.State.datos_procesados = true;
     toggleSpinner(false);
     displayResults(result);
+    return true;
   } catch (err) {
     toggleSpinner(false);
     showError(`Error ejecutando el motor: ${err.message}`);
+    return false;
   }
+}
+
+function scrollToResults() {
+  const results = document.getElementById('results-container');
+  if (results) results.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function runAnalysis() {
@@ -536,7 +543,8 @@ async function runManualAnalysis() {
   const csv = buildManualCsv(engineKey, groups);
   const file = new File([csv], 'datos_manuales.csv', { type: 'text/csv' });
 
-  await analyzeFile(file, engineKey);
+  const analysisSucceeded = await analyzeFile(file, engineKey);
+  if (analysisSucceeded) scrollToResults();
 }
 
 function isBayesEngine() {
