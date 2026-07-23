@@ -177,6 +177,7 @@ function renderFreqConfig() {
 function renderCalculatorMain() {
   const main = document.getElementById('calculator-main');
   const allowsCsv = window.State.enfoque === 'bayesiano';
+  visibleManualVariantCount = 0;
 
   const csvPanel = allowsCsv ? `
     <div id="method-csv">
@@ -228,15 +229,18 @@ function renderInputMethodTabs() {
 
 function renderManualEntryPanel(isVisible = false) {
   const groups = ['A', 'B', 'C', 'D', 'E'];
-  const cards = groups.map(group => `
-    <div class="manual-entry-group ${group === 'A' ? 'manual-control' : ''}">
-      <div class="manual-entry-title">${group === 'A' ? 'Grupo A (Control)' : `Variante ${group} (opcional)`}</div>
+  const cards = groups.map(group => {
+    const isInitiallyHidden = MANUAL_OPTIONAL_VARIANTS.includes(group);
+    return `
+    <div id="manual-group-${group.toLowerCase()}" class="manual-entry-group ${group === 'A' ? 'manual-control' : ''}"${isInitiallyHidden ? ' style="display:none;"' : ''}>
+      <div class="manual-entry-title">${group === 'A' ? 'Grupo A (Control)' : `Variante ${group}`}</div>
       <label class="input-label" for="manual-${group.toLowerCase()}-visitas">Usuarios / sesiones</label>
       <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-visitas" class="form-input" placeholder="${group === 'A' || group === 'B' ? 'Ej. 2800' : 'Dejar vacío si no se usa'}">
       <label class="input-label" for="manual-${group.toLowerCase()}-conv">Conversiones</label>
       <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-conv" class="form-input" placeholder="${group === 'A' || group === 'B' ? 'Ej. 580' : 'Dejar vacío si no se usa'}">
     </div>
-  `).join('');
+  `;
+  }).join('');
   return `
     <div id="method-manual"${isVisible ? '' : ' style="display:none;"'}>
       <p class="sub-header">Introducir datos manualmente</p>
@@ -248,11 +252,31 @@ function renderManualEntryPanel(isVisible = false) {
       <div class="manual-entry-grid">
         ${cards}
       </div>
+      <div class="btn-row" id="add-manual-variant-row" style="justify-content:center;">
+        <button class="btn btn-secondary" onclick="addManualVariant()">A&ntilde;adir variante</button>
+      </div>
       <div class="btn-row" style="justify-content:center;">
         <button class="btn btn-primary" onclick="runManualAnalysis()">Analizar experimento</button>
       </div>
     </div>
   `;
+}
+
+const MANUAL_OPTIONAL_VARIANTS = ['C', 'D', 'E'];
+let visibleManualVariantCount = 0;
+
+function addManualVariant() {
+  if (visibleManualVariantCount >= MANUAL_OPTIONAL_VARIANTS.length) return;
+
+  const group = MANUAL_OPTIONAL_VARIANTS[visibleManualVariantCount];
+  const card = document.getElementById(`manual-group-${group.toLowerCase()}`);
+  if (card) card.style.display = '';
+  visibleManualVariantCount += 1;
+
+  if (visibleManualVariantCount === MANUAL_OPTIONAL_VARIANTS.length) {
+    const addRow = document.getElementById('add-manual-variant-row');
+    if (addRow) addRow.style.display = 'none';
+  }
 }
 
 function selectInputMethod(method) {
@@ -476,7 +500,8 @@ function buildManualCsv(engineKey, groups) {
 function readManualGroups() {
   const groups = [];
   const allowsMultipleConversions = window.State.enfoque === 'bayesiano' && window.State.tipo_valores === '0_inf';
-  for (const group of ['A', 'B', 'C', 'D', 'E']) {
+  const visibleGroups = ['A', 'B', ...MANUAL_OPTIONAL_VARIANTS.slice(0, visibleManualVariantCount)];
+  for (const group of visibleGroups) {
     const visitsRaw = document.getElementById(`manual-${group.toLowerCase()}-visitas`).value.trim();
     const conversionsRaw = document.getElementById(`manual-${group.toLowerCase()}-conv`).value.trim();
     if (!visitsRaw && !conversionsRaw && group !== 'A') continue;

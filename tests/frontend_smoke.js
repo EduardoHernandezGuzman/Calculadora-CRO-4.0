@@ -73,6 +73,32 @@ const bayesNoSidHtml = elements['calculator-main'].innerHTML;
 if (!bayesNoSidHtml.includes('Cargar CSV') || !bayesNoSidHtml.includes('Introducir datos manualmente')) {
   throw new Error('La entrada manual no aparece en Bayesiano.');
 }
+if (bayesNoSidHtml.includes('id="manual-group-a" style="display:none;"') || bayesNoSidHtml.includes('id="manual-group-b" style="display:none;"')) {
+  throw new Error('A o B aparecen ocultos inicialmente.');
+}
+for (const group of ['c', 'd', 'e']) {
+  if (!bayesNoSidHtml.includes(`id="manual-group-${group}" class="manual-entry-group " style="display:none;"`)) {
+    throw new Error(`La variante ${group.toUpperCase()} aparece visible inicialmente.`);
+  }
+}
+if (!bayesNoSidHtml.includes('A&ntilde;adir variante')) throw new Error('Falta el CTA para añadir variantes.');
+
+for (const group of ['c', 'd', 'e']) element(`manual-group-${group}`);
+element('add-manual-variant-row');
+evaluate('addManualVariant()');
+if (elements['manual-group-c'].style.display !== '' || elements['manual-group-d'].style.display === '') {
+  throw new Error('El primer clic no muestra exclusivamente C.');
+}
+evaluate('addManualVariant()');
+if (elements['manual-group-d'].style.display !== '' || elements['manual-group-e'].style.display === '') {
+  throw new Error('El segundo clic no muestra exclusivamente D.');
+}
+evaluate('addManualVariant()');
+if (elements['manual-group-e'].style.display !== '' || elements['add-manual-variant-row'].style.display !== 'none') {
+  throw new Error('El tercer clic no muestra E y oculta el CTA.');
+}
+evaluate('addManualVariant()');
+if (evaluate('visibleManualVariantCount') !== 3) throw new Error('Se añaden variantes duplicadas.');
 
 context.window.State.session_id = true;
 evaluate('renderCalculatorMain()');
@@ -80,6 +106,7 @@ const bayesSidHtml = elements['calculator-main'].innerHTML;
 if (!bayesSidHtml.includes('Cargar CSV') || !bayesSidHtml.includes('Introducir datos manualmente')) {
   throw new Error('CSV y entrada manual no aparecen en Bayesiano con Session ID.');
 }
+if (evaluate('visibleManualVariantCount') !== 0) throw new Error('Cambiar Session ID no reinicia las variantes manuales.');
 
 for (const enfoque of ['frecuentista', 'freq_pvalue']) {
   for (const sessionId of [false, true]) {
@@ -110,8 +137,10 @@ elements['manual-a-visitas'].value = '100';
 elements['manual-a-conv'].value = '20';
 elements['manual-b-visitas'].value = '100';
 elements['manual-b-conv'].value = '25';
+elements['manual-e-visitas'].value = '100';
+elements['manual-e-conv'].value = '99';
 context.manualGroups = evaluate('readManualGroups()');
-if (context.manualGroups.length !== 2) throw new Error('Las variantes vacías no se omiten.');
+if (context.manualGroups.length !== 2) throw new Error('Las variantes ocultas se incluyen en los datos manuales.');
 
 elements['manual-a-conv'].value = '101';
 let uniqueRejected = false;
