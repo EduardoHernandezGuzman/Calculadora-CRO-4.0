@@ -629,19 +629,17 @@ function renderSrmBanner(srm) {
   if (!srm || typeof srm !== 'object') {
     return `
       <section class="srm-banner srm-unavailable" role="status" aria-label="Chequeo SRM no disponible">
-        <span class="srm-icon" aria-hidden="true">?</span>
         <div><h3>Chequeo SRM no disponible</h3><p>Esta respuesta no incluye información sobre el reparto de la muestra.</p></div>
       </section>`;
   }
 
   const hasSrm = srm.has_srm === true;
-  const title = hasSrm ? 'Se detecta SRM' : 'No se detecta SRM';
+  const title = hasSrm ? 'Se detectó SRM' : 'No se detectó SRM';
   const description = hasSrm
-    ? 'La distribución de la muestra difiere significativamente del reparto esperado. Revisa la asignación, el tracking y la implementación antes de interpretar los resultados.'
-    : 'El reparto observado de la muestra es compatible con el reparto esperado.';
+    ? 'Se ha detectado Sample Ratio Mismatch (SRM) en el experimento. El número de usuarios asignados a cada variante es significativamente diferente del esperado. Un SRM suele indicar errores en la asignación de tráfico, el tracking o un fallo en tu herramienta de testing, y puede invalidar las conclusiones del test.'
+    : 'La asignación de usuarios entre variantes coincide con la proporción esperada. No hay evidencias de problemas en el reparto de la muestra.';
   return `
     <section class="srm-banner ${hasSrm ? 'srm-detected' : 'srm-clear'}" role="status" aria-label="${title}">
-      <span class="srm-icon" aria-hidden="true">${hasSrm ? '!' : '✓'}</span>
       <div>
         <h3>${title}</h3>
         <p>${description}</p>

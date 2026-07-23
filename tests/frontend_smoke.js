@@ -246,16 +246,16 @@ context.output = {
 };
 evaluate('displayResults(output)');
 const rendered = elements['results-container'].innerHTML;
-if (!rendered.includes('No se detecta SRM')) throw new Error('Falta el banner SRM verde.');
+if (!rendered.includes('No se detectó SRM')) throw new Error('Falta el banner SRM verde.');
 if ((rendered.match(/class="srm-banner/g) || []).length !== 1) throw new Error('El banner SRM aparece más de una vez.');
-if (rendered.indexOf('No se detecta SRM') > rendered.indexOf('Variante ganadora')) throw new Error('Orden visual SRM incorrecto.');
+if (rendered.indexOf('No se detectó SRM') > rendered.indexOf('Variante ganadora')) throw new Error('Orden visual SRM incorrecto.');
 if (rendered.indexOf('Interpretación IA') > rendered.indexOf('Resumen')) throw new Error('IA aparece demasiado tarde.');
 if ((rendered.match(/data:image\/png;base64/g) || []).length !== 4) throw new Error('No se renderizan todas las figuras.');
 if (!rendered.includes('reporte-multivariante.pdf')) throw new Error('PDF no descargable.');
 
 context.redSrm = { has_srm: true, p_value: 0.0000000123, alpha: 0.01 };
 const redBanner = evaluate('renderSrmBanner(redSrm)');
-if (!redBanner.includes('Se detecta SRM') || !redBanner.includes('1.23e-8')) throw new Error('Banner SRM rojo o p-value científico incorrecto.');
+if (!redBanner.includes('Se detectó SRM') || !redBanner.includes('1.23e-8')) throw new Error('Banner SRM rojo o p-value científico incorrecto.');
 if (!evaluate('renderSrmBanner(null)').includes('Chequeo SRM no disponible')) throw new Error('Una respuesta antigua sin SRM rompe el frontend.');
 
 element('chk-pdf').checked = false;
