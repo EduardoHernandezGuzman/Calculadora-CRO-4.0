@@ -177,7 +177,7 @@ function renderFreqConfig() {
 function renderCalculatorMain() {
   const main = document.getElementById('calculator-main');
   const allowsCsv = window.State.enfoque === 'bayesiano';
-  visibleManualVariantCount = 0;
+  visibleManualVariants = new Set();
 
   const csvPanel = allowsCsv ? `
     <div id="method-csv">
@@ -233,11 +233,14 @@ function renderManualEntryPanel(isVisible = false) {
     const isInitiallyHidden = MANUAL_OPTIONAL_VARIANTS.includes(group);
     return `
     <div id="manual-group-${group.toLowerCase()}" class="manual-entry-group ${group === 'A' ? 'manual-control' : ''}"${isInitiallyHidden ? ' style="display:none;"' : ''}>
-      <div class="manual-entry-title">${group === 'A' ? 'Grupo A (Control)' : `Variante ${group}`}</div>
+      <div class="manual-entry-heading">
+        <div class="manual-entry-title">${group === 'A' ? 'Grupo A (Control)' : `Variante ${group}`}</div>
+        ${isInitiallyHidden ? `<button type="button" class="manual-variant-remove" aria-label="Eliminar variante ${group}" onclick="removeManualVariant('${group}')">&times;</button>` : ''}
+      </div>
       <label class="input-label" for="manual-${group.toLowerCase()}-visitas">Usuarios / sesiones</label>
-      <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-visitas" class="form-input" placeholder="${group === 'A' || group === 'B' ? 'Ej. 2800' : 'Dejar vacío si no se usa'}">
+      <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-visitas" class="form-input" placeholder="Ej. 2800">
       <label class="input-label" for="manual-${group.toLowerCase()}-conv">Conversiones</label>
-      <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-conv" class="form-input" placeholder="${group === 'A' || group === 'B' ? 'Ej. 580' : 'Dejar vacío si no se usa'}">
+      <input type="number" min="0" step="1" id="manual-${group.toLowerCase()}-conv" class="form-input" placeholder="Ej. 580">
     </div>
   `;
   }).join('');
@@ -263,20 +266,35 @@ function renderManualEntryPanel(isVisible = false) {
 }
 
 const MANUAL_OPTIONAL_VARIANTS = ['C', 'D', 'E'];
-let visibleManualVariantCount = 0;
+let visibleManualVariants = new Set();
 
 function addManualVariant() {
-  if (visibleManualVariantCount >= MANUAL_OPTIONAL_VARIANTS.length) return;
+  const group = MANUAL_OPTIONAL_VARIANTS.find(variant => !visibleManualVariants.has(variant));
+  if (!group) return;
 
-  const group = MANUAL_OPTIONAL_VARIANTS[visibleManualVariantCount];
   const card = document.getElementById(`manual-group-${group.toLowerCase()}`);
   if (card) card.style.display = '';
-  visibleManualVariantCount += 1;
+  visibleManualVariants.add(group);
 
-  if (visibleManualVariantCount === MANUAL_OPTIONAL_VARIANTS.length) {
+  if (visibleManualVariants.size === MANUAL_OPTIONAL_VARIANTS.length) {
     const addRow = document.getElementById('add-manual-variant-row');
     if (addRow) addRow.style.display = 'none';
   }
+}
+
+function removeManualVariant(group) {
+  if (!MANUAL_OPTIONAL_VARIANTS.includes(group) || !visibleManualVariants.has(group)) return;
+
+  const visits = document.getElementById(`manual-${group.toLowerCase()}-visitas`);
+  const conversions = document.getElementById(`manual-${group.toLowerCase()}-conv`);
+  const card = document.getElementById(`manual-group-${group.toLowerCase()}`);
+  if (visits) visits.value = '';
+  if (conversions) conversions.value = '';
+  if (card) card.style.display = 'none';
+  visibleManualVariants.delete(group);
+
+  const addRow = document.getElementById('add-manual-variant-row');
+  if (addRow) addRow.style.display = '';
 }
 
 function selectInputMethod(method) {
@@ -507,7 +525,7 @@ function buildManualCsv(engineKey, groups) {
 function readManualGroups() {
   const groups = [];
   const allowsMultipleConversions = window.State.enfoque === 'bayesiano' && window.State.tipo_valores === '0_inf';
-  const visibleGroups = ['A', 'B', ...MANUAL_OPTIONAL_VARIANTS.slice(0, visibleManualVariantCount)];
+  const visibleGroups = ['A', 'B', ...MANUAL_OPTIONAL_VARIANTS.filter(group => visibleManualVariants.has(group))];
   for (const group of visibleGroups) {
     const visitsRaw = document.getElementById(`manual-${group.toLowerCase()}-visitas`).value.trim();
     const conversionsRaw = document.getElementById(`manual-${group.toLowerCase()}-conv`).value.trim();

@@ -100,8 +100,25 @@ for (const group of ['c', 'd', 'e']) {
   }
 }
 if (!bayesNoSidHtml.includes('A&ntilde;adir variante')) throw new Error('Falta el CTA para añadir variantes.');
+if (bayesNoSidHtml.includes('Dejar vacío si no se usa') || (bayesNoSidHtml.match(/placeholder="Ej\. 2800"/g) || []).length !== 5 || (bayesNoSidHtml.match(/placeholder="Ej\. 580"/g) || []).length !== 5) {
+  throw new Error('Los placeholders no son iguales para A-E.');
+}
+if (bayesNoSidHtml.includes('aria-label="Eliminar variante A"') || bayesNoSidHtml.includes('aria-label="Eliminar variante B"')) {
+  throw new Error('A o B permiten eliminarse.');
+}
+for (const group of ['C', 'D', 'E']) {
+  if (!bayesNoSidHtml.includes(`aria-label="Eliminar variante ${group}"`)) throw new Error(`Falta el botón para eliminar ${group}.`);
+}
 
-for (const group of ['c', 'd', 'e']) element(`manual-group-${group}`);
+for (const group of ['c', 'd', 'e']) {
+  element(`manual-group-${group}`);
+  element(`manual-${group}-visitas`);
+  element(`manual-${group}-conv`);
+}
+for (const group of ['a', 'b']) {
+  element(`manual-${group}-visitas`);
+  element(`manual-${group}-conv`);
+}
 element('add-manual-variant-row');
 evaluate('addManualVariant()');
 if (elements['manual-group-c'].style.display !== '' || elements['manual-group-d'].style.display === '') {
@@ -116,7 +133,35 @@ if (elements['manual-group-e'].style.display !== '' || elements['add-manual-vari
   throw new Error('El tercer clic no muestra E y oculta el CTA.');
 }
 evaluate('addManualVariant()');
-if (evaluate('visibleManualVariantCount') !== 3) throw new Error('Se añaden variantes duplicadas.');
+if (evaluate('visibleManualVariants.size') !== 3) throw new Error('Se añaden variantes duplicadas.');
+
+elements['manual-d-visitas'].value = '100';
+elements['manual-d-conv'].value = '20';
+evaluate("removeManualVariant('D')");
+if (elements['manual-group-d'].style.display !== 'none' || elements['manual-d-visitas'].value !== '' || elements['manual-d-conv'].value !== '') {
+  throw new Error('Eliminar D no oculta la tarjeta y limpia sus valores.');
+}
+if (elements['manual-group-c'].style.display !== '' || elements['manual-group-e'].style.display !== '' || elements['add-manual-variant-row'].style.display !== '') {
+  throw new Error('Eliminar D afecta a C/E o no recupera el CTA.');
+}
+for (const group of ['a', 'b', 'c', 'e']) {
+  elements[`manual-${group}-visitas`].value = '100';
+  elements[`manual-${group}-conv`].value = '20';
+}
+context.groupsAfterRemoval = evaluate('readManualGroups()');
+if (context.groupsAfterRemoval.map(item => item.group).join('') !== 'ABCE') {
+  throw new Error('La variante eliminada entra en readManualGroups().');
+}
+context.csvAfterRemoval = evaluate("buildManualCsv('bayes_0_1_no_sid', groupsAfterRemoval)");
+if (context.csvAfterRemoval.includes('Visitas D') || context.csvAfterRemoval.includes('Conversiones D')) {
+  throw new Error('La variante eliminada entra en el CSV manual.');
+}
+evaluate('addManualVariant()');
+if (elements['manual-group-d'].style.display !== '' || evaluate('visibleManualVariants.size') !== 3) {
+  throw new Error('D no puede volver a añadirse o se duplica.');
+}
+evaluate('addManualVariant()');
+if (evaluate('visibleManualVariants.size') !== 3) throw new Error('Se crean duplicados tras volver a añadir D.');
 
 context.window.State.session_id = true;
 evaluate('renderCalculatorMain()');
@@ -124,7 +169,7 @@ const bayesSidHtml = elements['calculator-main'].innerHTML;
 if (!bayesSidHtml.includes('Cargar CSV') || !bayesSidHtml.includes('Introducir datos manualmente')) {
   throw new Error('CSV y entrada manual no aparecen en Bayesiano con Session ID.');
 }
-if (evaluate('visibleManualVariantCount') !== 0) throw new Error('Cambiar Session ID no reinicia las variantes manuales.');
+if (evaluate('visibleManualVariants.size') !== 0) throw new Error('Cambiar Session ID no reinicia las variantes manuales.');
 
 for (const enfoque of ['frecuentista', 'freq_pvalue']) {
   for (const sessionId of [false, true]) {
