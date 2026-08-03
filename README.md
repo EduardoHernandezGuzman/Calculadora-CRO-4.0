@@ -1,12 +1,12 @@
 # Calculadora CRO 4.0 - A/B Testing
 
-Aplicación web para analizar experimentos con un control A y hasta cuatro variantes B, C, D y E. Utiliza modelos bayesianos y frecuentistas orientados a CRO (Conversion Rate Optimization) e incluye carga de CSV, entrada manual, gráficos, interpretación opcional con IA y exportación a PDF.
+Aplicación web para analizar experimentos con un control A y hasta cuatro variantes B, C, D y E. Utiliza enfoques bayesianos y frecuentistas orientados a CRO (Conversion Rate Optimization) e incluye entrada manual, carga de CSV en el flujo bayesiano, gráficos, interpretación opcional con IA y exportación a PDF.
 
 Todas las comparaciones se realizan exclusivamente contra el control: A vs B, A vs C, A vs D y A vs E. No se calculan comparaciones entre variantes.
 
 ## Motores disponibles
 
-La aplicación conecta ocho combinaciones de motor y unidad de análisis:
+El backend conecta ocho combinaciones de motor y unidad de análisis:
 
 | Enfoque | Método | Sin Session ID | Con Session ID |
 |---|---|---:|---:|
@@ -16,6 +16,8 @@ La aplicación conecta ocho combinaciones de motor y unidad de análisis:
 | Frecuentista analítico | z-test de proporciones / t-test de Welch | Sí | Sí |
 
 Los contrastes frecuentistas permiten hipótesis de dos colas o de una cola, tanto derecha como izquierda.
+
+El selector de la interfaz muestra únicamente **Enfoque Bayesiano** y **Enfoque Frecuentista (p-value)**. Bootstrap y los motores bayesianos sin Session ID se conservan para compatibilidad interna y de API, pero no son seleccionables desde el frontend. En el flujo bayesiano, `session_id` se fija automáticamente a `true` y el asistente pasa directamente a la selección de conversiones únicas o múltiples.
 
 ## Requisitos
 
@@ -104,6 +106,8 @@ El formato depende de la unidad de análisis seleccionada. Los nombres de las co
 - B, C, D y E son opcionales; solo se incluyen las variantes disponibles.
 - Se admiten experimentos A/B, A/B/C, A/B/C/D y A/B/C/D/E.
 
+En la interfaz, el enfoque bayesiano permite cargar CSV o introducir datos manualmente y utiliza siempre Session ID. El enfoque frecuentista p-value muestra únicamente entrada manual y permite elegir si el análisis utiliza Session ID. La API conserva la aceptación de CSV para todos los motores.
+
 ### Datos agregados, sin Session ID
 
 Cada grupo utilizado necesita las columnas `Visitas X` y `Conversiones X`. Las variantes no utilizadas no deben incluirse.
@@ -147,10 +151,10 @@ Los motores frecuentistas con Session ID conservan compatibilidad con el formato
 
 ### Entrada manual
 
-La entrada manual está disponible en los ocho motores y utiliza el mismo contrato que un CSV:
+La entrada manual está disponible en todos los flujos visibles de la interfaz y utiliza el mismo contrato que un CSV:
 
 - A es obligatorio.
-- B-E son opcionales y las variantes vacías no se envían.
+- B se muestra inicialmente; C-E pueden añadirse y eliminarse. Las variantes ocultas, eliminadas o vacías no se envían.
 - Sin Session ID se genera internamente una fila agregada con visitas y conversiones.
 - Con Session ID se generan `Día`, `SessionID` y las columnas canónicas `Conversiones X`.
 
@@ -176,7 +180,7 @@ Al analizar varias variantes aumenta el riesgo global de falsos positivos. Los r
 
 Cada análisis incluye un chequeo global SRM (Sample Ratio Mismatch) independiente del motor estadístico. SRM comprueba mediante chi-cuadrado si el reparto de muestra entre todos los grupos detectados coincide con el reparto esperado; no mide diferencias de conversión.
 
-En esta versión el reparto esperado es uniforme y se utiliza `alpha = 0.01`. Se muestra “Se detecta SRM” únicamente cuando `p_value < alpha`. El aviso es informativo: no bloquea ni modifica el análisis, las comparaciones o la selección de variante.
+En esta versión el reparto esperado es uniforme y se utiliza `alpha = 0.01`. Se muestra “Se detectó SRM” únicamente cuando `p_value < alpha`. El aviso es informativo: no bloquea ni modifica el análisis, las comparaciones o la selección de variante.
 
 - Sin Session ID, la muestra es la suma de `Visitas X`.
 - Con Session ID, la muestra es el número de valores no nulos en `Conversiones X` o en las columnas heredadas `A`, `B`, etc.
@@ -192,7 +196,7 @@ SRM todavía no se incluye en los prompts de IA ni en el PDF. Una futura versió
 - `examples/frecuentista_sin_session_abcde.csv`
 - `examples/frecuentista_con_session_abc.csv`
 
-Todos contienen datos sintéticos y pueden cargarse directamente desde la interfaz.
+Todos contienen datos sintéticos válidos para pruebas y llamadas directas a la API. La interfaz solo muestra carga de CSV en el flujo bayesiano con Session ID; los demás ejemplos sirven para validar los motores conservados en backend.
 
 ## Pruebas
 
@@ -201,6 +205,7 @@ La batería no requiere dependencias adicionales:
 ```bash
 MPLBACKEND=Agg venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 node --check frontend/js/calculator.js
+node --check frontend/js/wizard.js
 node tests/frontend_smoke.js
 ```
 
