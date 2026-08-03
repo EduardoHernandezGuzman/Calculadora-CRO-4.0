@@ -704,6 +704,23 @@ function formatInterval(interval) {
   return '—';
 }
 
+function renderCardInterval(comparison) {
+  const interval = comparison.interval;
+  const evidenceName = comparison.evidence && comparison.evidence.name;
+  const isBayesian = evidenceName === 'probability_superiority';
+  const isCenteredFrequentist = interval && interval.name === 'centered_95';
+  const hasBothLimits = interval && finiteNumber(interval.low) !== null && finiteNumber(interval.high) !== null;
+
+  if (hasBothLimits && (isBayesian || isCenteredFrequentist)) {
+    return `<div class="comparison-interval comparison-interval-bilateral">
+      <div><span>Límite inferior (IC 95 %)</span><strong>${formatPercentValue(interval.low)}</strong></div>
+      <div><span>Límite superior (IC 95 %)</span><strong>${formatPercentValue(interval.high)}</strong></div>
+    </div>`;
+  }
+
+  return `<div class="comparison-interval"><span>Intervalo ${escapeHtml((interval && interval.name) || '')}</span><strong>${formatInterval(interval)}</strong></div>`;
+}
+
 function evidenceLabel(comparison) {
   const variant = escapeHtml(comparison.variant || '—');
   const name = comparison.evidence && comparison.evidence.name;
@@ -829,7 +846,7 @@ function renderComparisonCards(comparisons, summary) {
           <div><span>Uplift</span><strong>${formatPercentValue(comparison.uplift_pct)}</strong></div>
           <div><span>${renderEvidenceLabel(comparison, index)}</span><strong>${evidenceValue(comparison)}</strong></div>
         </div>
-        <div class="comparison-interval"><span>Intervalo ${escapeHtml((comparison.interval && comparison.interval.name) || '')}</span><strong>${formatInterval(comparison.interval)}</strong></div>
+        ${renderCardInterval(comparison)}
         ${detailItems.length ? `<div class="comparison-details">${detailItems.join('')}</div>` : ''}
       </article>`;
   }).join('');

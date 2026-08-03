@@ -280,8 +280,19 @@ let cards = evaluate('renderComparisonCards(comparisons, summary)');
 if ((cards.match(/data-is-best="true"/g) || []).length !== 1) throw new Error('Destacado principal inválido.');
 if (!cards.includes('A vs B') || !cards.includes('A vs E')) throw new Error('Faltan tarjetas multivariantes.');
 if (!cards.includes('> 1.20%') || !cards.includes('< -1.40%')) throw new Error('Intervalos null incorrectos.');
+if (!cards.includes('Límite inferior (IC 95 %)') || !cards.includes('Límite superior (IC 95 %)')) {
+  throw new Error('El intervalo frecuentista centrado no muestra sus límites por separado.');
+}
+if (cards.includes('[-2.00%, 32.00%]')) throw new Error('La tarjeta mantiene el formato conjunto del intervalo centrado.');
 if (/\b(null|NaN|undefined)\b/.test(cards)) throw new Error('Se muestran valores técnicos vacíos.');
 if (!cards.includes('Resultado concluyente')) throw new Error('Falta el estado concluyente no seleccionado.');
+context.bayesianComparisons = [comparison('B', { evidenceName: 'probability_superiority', interval: { name: 'credible_interval', low: 45.12, high: 97.97 } })];
+context.bayesianCards = evaluate("renderComparisonCards(bayesianComparisons, [{ control: 'A', variant: 'B' }])");
+if (!context.bayesianCards.includes('Límite inferior (IC 95 %)') || !context.bayesianCards.includes('45.12%') ||
+    !context.bayesianCards.includes('Límite superior (IC 95 %)') || !context.bayesianCards.includes('97.97%')) {
+  throw new Error('El intervalo bayesiano no muestra sus límites por separado.');
+}
+if (context.bayesianCards.includes('[45.12%, 97.97%]')) throw new Error('La tarjeta bayesiana mantiene el formato conjunto.');
 const tooltipText = 'Indica la probabilidad de que la diferencia observada entre las variantes no se debe al azar. Un p-value inferior al nivel de significancia (0,05 en este caso) sugiere que la diferencia observada es estadísticamente significativa.';
 if (!cards.includes(`data-tooltip="${tooltipText}"`) || !cards.includes('onmouseenter="showEvidenceTooltip(event)"') || !cards.includes('onfocus="showEvidenceTooltip(event)"')) {
   throw new Error('Tooltip de p-value incompleto o no accesible mediante teclado.');

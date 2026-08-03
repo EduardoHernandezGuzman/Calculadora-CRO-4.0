@@ -810,6 +810,15 @@ body {
   margin-top: 0.75rem;
 }
 
+.comparison-interval-bilateral {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.comparison-interval-bilateral > div {
+  min-width: 0;
+}
+
 .comparison-details {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1163,6 +1172,11 @@ body {
   .comparison-interval {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .comparison-interval-bilateral {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .comparison-details {
