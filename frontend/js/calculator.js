@@ -206,7 +206,7 @@ function renderCalculatorMain() {
   main.innerHTML = `
     <h2 class="main-header">Calculadora para Tests A/B</h2>
     <div class="info-box">
-      Esta herramienta te permite analizar los resultados de tus tests A/B usando modelos estad&iacute;sticos bayesianos o frecuentistas. Adem&aacute;s, te ayudaremos a la interpretaci&oacute;n de los resultados mediante Inteligencia Artificial. ${introText}
+      Esta herramienta te permite analizar los resultados de tus tests A/B usando enfoques estad&iacute;sticos bayesianos o frecuentistas. Adem&aacute;s, te ayudaremos a la interpretaci&oacute;n de los resultados mediante Inteligencia Artificial. ${introText}
     </div>
     <div class="section-spacer"></div>
     ${allowsCsv ? renderInputMethodTabs() : ''}

@@ -31,16 +31,16 @@
           <div class="result-card">
             <div class="choice-title">¡Bienvenido a la calculadora de tests A/B!</div>
             <div class="choice-text">
-              Esta calculadora te ayudar&aacute; a tomar decisiones basadas en datos eligiendo entre el enfoque bayesiano o frecuentista, los dos modelos estad&iacute;sticos m&aacute;s comunes.
+              Esta calculadora te ayudar&aacute; a tomar decisiones basadas en datos eligiendo entre el enfoque bayesiano o frecuentista, los dos enfoques estad&iacute;sticos m&aacute;s comunes.
             </div>
           </div>
           <div class="result-card">
-            <div class="choice-title">Elige el modelo que deseas utilizar para analizar tu test A/B</div>
+            <div class="choice-title">Elige el enfoque que deseas utilizar para analizar tu test A/B</div>
             <div class="choice-text">&iquest;No sabes cu&aacute;l elegir? No te preocupes: te explico cada uno de forma sencilla.</div>
           </div>
           <div class="choice-row">
             <div class="choice-card" data-value="bayesiano" onclick="selectModel('bayesiano')">
-              <div class="choice-title">Modelo Bayesiano</div>
+              <div class="choice-title">Enfoque Bayesiano</div>
               <div class="choice-text">
                 El enfoque bayesiano interpreta los resultados en t&eacute;rminos de probabilidad directa. En lugar de preguntarse &quot;&iquest;es este resultado estad&iacute;sticamente significativo?&quot;, responde preguntas como: &quot;&iquest;cu&aacute;l es la probabilidad de que la variante B sea mejor que la A?&quot;
                 <ul>
@@ -52,7 +52,7 @@
             </div>
             <div class="choice-card choice-card-legacy" data-value="frecuentista" onclick="selectModel('frecuentista')">
               <div class="legacy-badge">Modelo anterior</div>
-              <div class="choice-title">Modelo Frecuentista (Bootstrap)</div>
+              <div class="choice-title">Enfoque Frecuentista (Bootstrap)</div>
               <div class="choice-text">
                 El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar, respondiendo preguntas como: &ldquo;&iquest;la diferencia entre A y B es estad&iacute;sticamente significativa?&rdquo; o &ldquo;&iquest;podemos rechazar la hip&oacute;tesis nula?&rdquo;.
                 <ul>
@@ -62,7 +62,7 @@
               </div>
             </div>
             <div class="choice-card" data-value="freq_pvalue" onclick="selectModel('freq_pvalue')">
-              <div class="choice-title">Modelo Frecuentista (p-value)</div>
+              <div class="choice-title">Enfoque Frecuentista (p-value)</div>
               <div class="choice-text">
                 El enfoque frecuentista se centra en comprobar si la diferencia observada podr&iacute;a deberse al azar, respondiendo preguntas como: &ldquo;&iquest;la diferencia entre A y B es estad&iacute;sticamente significativa?&rdquo; o &ldquo;&iquest;podemos rechazar la hip&oacute;tesis nula?&rdquo;.
                 <ul>
@@ -81,7 +81,7 @@
           <div class="result-card">
             <div class="choice-title" id="step2-title">¡Buena elecci&oacute;n!</div>
             <div class="choice-text" id="step2-subtitle">
-              Has seleccionado analizar tu test A/B con el modelo <b id="step2-enfoque"></b>.
+              Has seleccionado analizar tu test A/B con el enfoque <b id="step2-enfoque"></b>.
             </div>
           </div>
           <div class="result-card">
