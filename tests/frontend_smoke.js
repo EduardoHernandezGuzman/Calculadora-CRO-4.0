@@ -100,6 +100,13 @@ if (evaluate('getEngineKey()') !== 'bayes_0_1_sid') throw new Error('Conversione
 context.window.State.tipo_valores = '0_inf';
 if (evaluate('getEngineKey()') !== 'bayes_0_inf_sid') throw new Error('Conversiones múltiples no mantienen el motor Bayesiano con Session ID.');
 const indexHtml = fs.readFileSync('frontend/index.html', 'utf8');
+const modelSelectionStep = indexHtml.slice(indexHtml.indexOf('id="step-1"'), indexHtml.indexOf('id="step-2"'));
+if (modelSelectionStep.includes("selectModel('frecuentista')") || modelSelectionStep.includes('Enfoque Frecuentista (Bootstrap)')) {
+  throw new Error('Bootstrap sigue siendo seleccionable desde la interfaz.');
+}
+if ((modelSelectionStep.match(/onclick="selectModel\('/g) || []).length !== 2 || !modelSelectionStep.includes('choice-row-primary')) {
+  throw new Error('El selector principal no contiene únicamente dos opciones centradas.');
+}
 const bayesStep = indexHtml.slice(indexHtml.indexOf('id="step-3-bayes"'), indexHtml.indexOf('id="step-3-freq"'));
 if (bayesStep.includes('onclick="goToStep(2)"')) throw new Error('El flujo bayesiano permite volver a la pantalla de Session ID.');
 context.window.State.tipo_valores = '0_1';
