@@ -99,6 +99,19 @@ context.window.State.tipo_valores = '0_1';
 if (evaluate('getEngineKey()') !== 'bayes_0_1_sid') throw new Error('Conversiones únicas no mantienen el motor Bayesiano con Session ID.');
 context.window.State.tipo_valores = '0_inf';
 if (evaluate('getEngineKey()') !== 'bayes_0_inf_sid') throw new Error('Conversiones múltiples no mantienen el motor Bayesiano con Session ID.');
+element('freq-tail-choice');
+element('freq-direction-choice');
+context.window.State.session_id = true;
+evaluate("selectModel('freq_pvalue')");
+if (context.shownStep !== 3 || context.window.State.wizard_step !== 3) {
+  throw new Error('El flujo frecuentista no salta directamente a la pantalla del tipo de hipótesis.');
+}
+if (context.window.State.session_id !== false) throw new Error('El flujo frecuentista no fija session_id=false.');
+if (elements['freq-tail-choice'].style.display !== '' || elements['freq-direction-choice'].style.display !== 'none') {
+  throw new Error('La pantalla inicial de hipótesis frecuentista no queda visible.');
+}
+context.window.State.freq_interval_type = 'derecha';
+if (evaluate('getEngineKey()') !== 'freq_pvalue_no_sid') throw new Error('El flujo frecuentista no resuelve freq_pvalue_no_sid.');
 const indexHtml = fs.readFileSync('frontend/index.html', 'utf8');
 const modelSelectionStep = indexHtml.slice(indexHtml.indexOf('id="step-1"'), indexHtml.indexOf('id="step-2"'));
 if (modelSelectionStep.includes("selectModel('frecuentista')") || modelSelectionStep.includes('Enfoque Frecuentista (Bootstrap)')) {
@@ -109,6 +122,11 @@ if ((modelSelectionStep.match(/onclick="selectModel\('/g) || []).length !== 2 ||
 }
 const bayesStep = indexHtml.slice(indexHtml.indexOf('id="step-3-bayes"'), indexHtml.indexOf('id="step-3-freq"'));
 if (bayesStep.includes('onclick="goToStep(2)"')) throw new Error('El flujo bayesiano permite volver a la pantalla de Session ID.');
+const freqStep = indexHtml.slice(indexHtml.indexOf('id="step-3-freq"'), indexHtml.indexOf('id="step-4"'));
+if (!freqStep.includes('onclick="goToStep(1)"') || freqStep.includes('onclick="goToStep(2)"')) {
+  throw new Error('Volver desde la hipótesis frecuentista no regresa directamente al selector de enfoque.');
+}
+context.window.State.enfoque = 'bayesiano';
 context.window.State.tipo_valores = '0_1';
 context.window.State.session_id = false;
 

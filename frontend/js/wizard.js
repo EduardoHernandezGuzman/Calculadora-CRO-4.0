@@ -45,7 +45,9 @@ function selectModel(value) {
     showWizardStep3Bayes();
     return;
   }
-  goToStep(2);
+  window.State.session_id = false;
+  goToStep(3);
+  showWizardStep3Freq();
 }
 
 function selectSessionId(value) {
@@ -103,7 +105,7 @@ function goToStep(step) {
     document.getElementById('step2-enfoque').textContent = labelMap[window.State.enfoque] || 'Frecuentista';
   }
 
-  if (step === 3 && window.State.enfoque === 'frecuentista') {
+  if (step === 3 && (window.State.enfoque === 'frecuentista' || window.State.enfoque === 'freq_pvalue')) {
     showFreqTailChoice();
   }
 }
