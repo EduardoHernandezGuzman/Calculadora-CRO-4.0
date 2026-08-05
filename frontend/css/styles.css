@@ -677,6 +677,8 @@ body {
 
 .comparison-conclusive { border-top-color: #2563eb; }
 .comparison-neutral { background: #fbfcfe; }
+.comparison-mirror { box-shadow: none; }
+.comparison-mirror .comparison-core { grid-template-columns: 1fr; }
 
 .comparison-card-header {
   display: flex;
@@ -817,6 +819,13 @@ body {
 
 .comparison-interval-bilateral > div {
   min-width: 0;
+}
+
+.comparison-outcome {
+  margin-top: 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .comparison-details {

@@ -11,8 +11,11 @@ VARIANT_GROUPS = ("B", "C", "D", "E")
 ALLOWED_GROUPS = (CONTROL_GROUP, *VARIANT_GROUPS)
 
 STATUS_WINNER = "Ganadora"
+STATUS_CONCLUSIVE = "Resultado concluyente"
 STATUS_BEST_CANDIDATE = "Mejor candidata"
 STATUS_NOT_CONCLUSIVE = "Sin ganador concluyente"
+
+_COMPARISON_WINNER_UNSET = object()
 
 _AGGREGATE_COLUMN = re.compile(r"^(Visitas|Conversiones) ([A-Z])$")
 _SESSION_COLUMN = re.compile(r"^Conversiones ([A-Z])$")
@@ -130,11 +133,26 @@ def make_comparison_record(
     favorable: bool,
     significant: bool,
     metrics: Optional[Mapping[str, Any]] = None,
+    comparison_winner: Any = _COMPARISON_WINNER_UNSET,
 ) -> Dict[str, Any]:
     if variant not in VARIANT_GROUPS:
         raise ValueError("La comparación debe usar una variante entre B, C, D y E.")
     if len(interval) != 2:
         raise ValueError("El intervalo debe contener exactamente dos límites.")
+
+    explicit_winner = comparison_winner is not _COMPARISON_WINNER_UNSET
+    if explicit_winner and comparison_winner not in (None, CONTROL_GROUP, variant):
+        raise ValueError("El ganador debe ser el control A, la variante o null.")
+    normalized_winner = (
+        comparison_winner
+        if explicit_winner
+        else variant if favorable and significant else None
+    )
+    comparison_status = (
+        STATUS_CONCLUSIVE if normalized_winner is not None else STATUS_NOT_CONCLUSIVE
+    ) if explicit_winner else (
+        STATUS_WINNER if favorable and significant else STATUS_NOT_CONCLUSIVE
+    )
 
     record: Dict[str, Any] = {
         "control": CONTROL_GROUP,
@@ -154,9 +172,8 @@ def make_comparison_record(
         },
         "favorable": bool(favorable),
         "significant": bool(significant),
-        "comparison_status": (
-            STATUS_WINNER if favorable and significant else STATUS_NOT_CONCLUSIVE
-        ),
+        "comparison_winner": normalized_winner,
+        "comparison_status": comparison_status,
         "selection_label": None,
         "is_best": False,
         "metrics": _lightweight_mapping(metrics or {}),
@@ -183,7 +200,10 @@ def mark_best_comparison(
         record["is_best"] = is_best
         record["selection_label"] = None
         if is_best:
-            if winner and record.get("comparison_status") != STATUS_WINNER:
+            if winner and not (
+                record.get("comparison_status") in (STATUS_WINNER, STATUS_CONCLUSIVE)
+                and record.get("comparison_winner") == record.get("variant")
+            ):
                 raise ValueError(
                     "Una comparación solo puede seleccionarse como Ganadora si "
                     "su estado individual es concluyente."

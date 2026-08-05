@@ -198,45 +198,89 @@ def _build_lightweight_comparisons(
     comparisons = []
     for variant in variants:
         stats = paso[f"A_vs_{variant}"]
+        probability_variant_better = float(stats["prob_mejor"])
         favorable = float(stats["uplift_media"]) > 0
-        significant = (
-            float(stats["prob_mejor"]) >= 0.95
-            and float(stats["ci_centered"][0]) > 0
-        )
-        comparisons.append(
-            make_comparison_record(
-                variant=variant,
-                control_value=float(paso["A"]["media"]),
-                variant_value=float(paso[variant]["media"]),
-                uplift_pct=float(stats["uplift_media"]) * 100,
-                difference=float(np.mean(stats["diff"])),
-                evidence_name="probability_superiority",
-                evidence_value=float(stats["prob_mejor"]),
-                interval_name="centered_95",
-                interval=[
-                    float(stats["ci_centered"][0]) * 100,
-                    float(stats["ci_centered"][1]) * 100,
+        comparison_winner = None
+        if probability_variant_better >= 0.95:
+            comparison_winner = variant
+        elif probability_variant_better <= 0.05:
+            comparison_winner = "A"
+        significant = comparison_winner is not None
+        record = make_comparison_record(
+            variant=variant,
+            control_value=float(paso["A"]["media"]),
+            variant_value=float(paso[variant]["media"]),
+            uplift_pct=float(stats["uplift_media"]) * 100,
+            difference=float(np.mean(stats["diff"])),
+            evidence_name="probability_superiority",
+            evidence_value=float(stats["prob_mejor"]),
+            interval_name="centered_95",
+            interval=[
+                float(stats["ci_centered"][0]) * 100,
+                float(stats["ci_centered"][1]) * 100,
+            ],
+            favorable=favorable,
+            significant=significant,
+            comparison_winner=comparison_winner,
+            metrics={
+                "uplift_std_pct": float(stats["uplift_std"]) * 100,
+                "ci_floor_pct": [
+                    float(stats["ci_right"][0]) * 100,
+                    float(stats["ci_right"][1]) * 100,
                 ],
-                favorable=favorable,
-                significant=significant,
-                metrics={
-                    "uplift_std_pct": float(stats["uplift_std"]) * 100,
-                    "ci_floor_pct": [
-                        float(stats["ci_right"][0]) * 100,
-                        float(stats["ci_right"][1]) * 100,
-                    ],
-                    "ci_ceiling_pct": [
-                        float(stats["ci_left"][0]) * 100,
-                        float(stats["ci_left"][1]) * 100,
-                    ],
-                },
-            )
+                "ci_ceiling_pct": [
+                    float(stats["ci_left"][0]) * 100,
+                    float(stats["ci_left"][1]) * 100,
+                ],
+            },
         )
+        control_samples = np.asarray(paso["A"]["muestras"], dtype=float)
+        variant_samples = np.asarray(paso[variant]["muestras"], dtype=float)
+        reverse_difference_samples = control_samples - variant_samples
+        reverse_uplift_samples = np.divide(
+            reverse_difference_samples,
+            variant_samples,
+            out=np.zeros_like(reverse_difference_samples),
+            where=variant_samples != 0,
+        )
+        reverse_interval = np.percentile(reverse_uplift_samples, [2.5, 97.5])
+        reverse_values = (
+            float(np.mean(reverse_uplift_samples) * 100),
+            float(np.mean(reverse_difference_samples)),
+            float(np.mean(control_samples > variant_samples)),
+            float(reverse_interval[0] * 100),
+            float(reverse_interval[1] * 100),
+        )
+        if not all(np.isfinite(value) for value in reverse_values):
+            raise ValueError("La comparación bayesiana inversa contiene valores no finitos.")
+        record["reverse_comparison"] = {
+            "reference": variant,
+            "compared": "A",
+            "reference_value": float(paso[variant]["media"]),
+            "compared_value": float(paso["A"]["media"]),
+            "uplift_pct": reverse_values[0],
+            "difference": reverse_values[1],
+            "evidence": {
+                "name": "probability_superiority",
+                "value": reverse_values[2],
+            },
+            "interval": {
+                "name": "centered_95",
+                "low": reverse_values[3],
+                "high": reverse_values[4],
+            },
+            "comparison_winner": comparison_winner,
+            "comparison_status": record["comparison_status"],
+            "is_best": False,
+        }
+        comparisons.append(record)
 
     winners = [
         item for item in comparisons
-        if item["comparison_status"] == STATUS_WINNER
+        if item["comparison_winner"] == item["variant"]
     ]
+    if not winners and any(item["comparison_winner"] == "A" for item in comparisons):
+        return mark_best_comparison(comparisons, None, winner=False)
     candidates = winners or [item for item in comparisons if item["favorable"]]
     if not candidates:
         return mark_best_comparison(comparisons, None, winner=False)

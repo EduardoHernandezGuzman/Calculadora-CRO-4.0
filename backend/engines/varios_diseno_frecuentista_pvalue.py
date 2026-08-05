@@ -253,6 +253,11 @@ def _build_comparisons(
             ]
             interval_name = "centered_95"
 
+        comparison_winner = None
+        if interval_name == "centered_95" and p_value < 0.05:
+            comparison_winner = r["variant"] if difference > 0 else "A" if difference < 0 else None
+        significant = comparison_winner is not None if interval_name == "centered_95" else p_value < 0.05
+
         comparisons.append(
             make_comparison_record(
                 variant=r["variant"],
@@ -265,7 +270,8 @@ def _build_comparisons(
                 interval_name=interval_name,
                 interval=interval,
                 favorable=favorable,
-                significant=p_value < 0.05,
+                significant=significant,
+                **({"comparison_winner": comparison_winner} if interval_name == "centered_95" else {}),
                 metrics={
                     "direction": direction,
                     "z_stat": float(r["z_stat"]),
@@ -284,7 +290,14 @@ def _build_comparisons(
             )
         )
 
-    winners = [item for item in comparisons if item["comparison_status"] == STATUS_WINNER]
+    winners = [
+        item for item in comparisons
+        if item["comparison_winner"] == item["variant"]
+    ]
+    if interval_type == "centrado" and not winners and any(
+        item["comparison_winner"] == "A" for item in comparisons
+    ):
+        return mark_best_comparison(comparisons, None, winner=False)
     candidates = winners or [item for item in comparisons if item["favorable"]]
     if not candidates:
         return mark_best_comparison(comparisons, None, winner=False)

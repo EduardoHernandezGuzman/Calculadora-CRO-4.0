@@ -797,6 +797,12 @@ function evidenceValue(comparison) {
 
 function renderSelectionOverview(comparisons) {
   const selected = comparisons.find(item => item.is_best === true);
+  const controlWinsAll = comparisons.length > 0 && comparisons.every(
+    item => item.comparison_winner === 'A'
+  );
+  if (controlWinsAll) {
+    return '<div class="selection-overview selection-winner"><span class="selection-icon" aria-hidden="true">★</span><div><b>Ganador: Control A</b><span>El control supera de forma concluyente a la variante analizada.</span></div></div>';
+  }
   if (!selected) {
     return '<div class="selection-overview selection-none"><span class="selection-icon" aria-hidden="true">○</span><div><b>No hay una variante ganadora concluyente</b><span>Ninguna comparación favorable ha sido seleccionada.</span></div></div>';
   }
@@ -811,16 +817,44 @@ function summaryForVariant(summary, variant) {
   return summary.find(row => String(row.variant || row.grupo_B_col || '') === String(variant)) || {};
 }
 
+function renderReverseComparisonCard(reverse) {
+  if (!reverse || typeof reverse !== 'object') return '';
+  const reference = escapeHtml(reverse.reference || '—');
+  const compared = escapeHtml(reverse.compared || '—');
+  const isConclusive = reverse.comparison_status === 'Resultado concluyente'
+    || reverse.comparison_status === 'Ganadora';
+  const winner = reverse.comparison_winner;
+  const badge = winner === 'A'
+    ? 'Ganador: Control A'
+    : winner ? `Ganador: ${escapeHtml(winner)}` : 'Sin ganador concluyente';
+
+  return `
+    <article class="comparison-card comparison-mirror ${isConclusive ? 'comparison-conclusive' : 'comparison-neutral'}" data-reference="${reference}" data-compared="${compared}" data-is-best="false" data-mirror="true">
+      <div class="comparison-card-header">
+        <div><span class="comparison-kicker">Comparación</span><h3>${reference} vs ${compared}</h3></div>
+        <span class="comparison-badge">${badge}</span>
+      </div>
+      <div class="comparison-core">
+        <div><span>Probabilidad de que ${compared} supere a ${reference}</span><strong>${evidenceValue(reverse)}</strong></div>
+      </div>
+    </article>`;
+}
+
 function renderComparisonCards(comparisons, summary) {
   const cards = comparisons.map((comparison, index) => {
     const row = summaryForVariant(summary, comparison.variant);
     const metrics = comparison.metrics || {};
+    const controlWon = comparison.comparison_winner === 'A';
+    const isConclusive = comparison.comparison_status === 'Resultado concluyente'
+      || comparison.comparison_status === 'Ganadora';
     const classes = comparison.is_best
       ? comparison.selection_label === 'Ganadora' ? 'comparison-winner' : 'comparison-candidate'
-      : comparison.comparison_status === 'Ganadora' ? 'comparison-conclusive' : 'comparison-neutral';
-    const badge = comparison.is_best
+      : isConclusive ? 'comparison-conclusive' : 'comparison-neutral';
+    const badge = controlWon
+      ? 'Ganador: Control A'
+      : comparison.is_best
       ? comparison.selection_label
-      : comparison.comparison_status === 'Ganadora' ? 'Resultado concluyente' : 'Sin ganador concluyente';
+      : isConclusive ? 'Resultado concluyente' : 'Sin ganador concluyente';
     const visitsA = row.n_visitas_A ?? row.n_A;
     const visitsVariant = row.n_visitas_B ?? row.n_B;
     const conversionsA = row.conv_A;
@@ -834,7 +868,7 @@ function renderComparisonCards(comparisons, summary) {
     if (finiteNumber(metrics.se_control) !== null) detailItems.push(`<span><b>EE control</b>${formatNumber(metrics.se_control, 4)}</span>`);
     if (finiteNumber(metrics.se_variante) !== null) detailItems.push(`<span><b>EE variante</b>${formatNumber(metrics.se_variante, 4)}</span>`);
     if (finiteNumber(metrics.se_diferencia) !== null) detailItems.push(`<span><b>EE diferencia</b>${formatNumber(metrics.se_diferencia, 4)}</span>`);
-    return `
+    const primaryCard = `
       <article class="comparison-card ${classes}" data-variant="${escapeHtml(comparison.variant)}" data-is-best="${comparison.is_best === true}">
         <div class="comparison-card-header">
           <div><span class="comparison-kicker">Comparación</span><h3>A vs ${escapeHtml(comparison.variant)}</h3></div>
@@ -847,8 +881,10 @@ function renderComparisonCards(comparisons, summary) {
           <div><span>${renderEvidenceLabel(comparison, index)}</span><strong>${evidenceValue(comparison)}</strong></div>
         </div>
         ${renderCardInterval(comparison)}
+        ${controlWon ? `<p class="comparison-outcome">La variante ${escapeHtml(comparison.variant)} es significativamente peor que A.</p>` : ''}
         ${detailItems.length ? `<div class="comparison-details">${detailItems.join('')}</div>` : ''}
       </article>`;
+    return primaryCard + renderReverseComparisonCard(comparison.reverse_comparison);
   }).join('');
   return `<section class="comparisons-section" aria-label="Comparaciones contra el control"><div class="comparisons-grid">${cards}</div></section>`;
 }

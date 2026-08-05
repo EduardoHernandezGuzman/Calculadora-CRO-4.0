@@ -77,6 +77,31 @@ def session_frame(groups: tuple[str, ...], visits: int = 80) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def aggregate_ab(conversions_a: int, conversions_b: int) -> pd.DataFrame:
+    return pd.DataFrame({
+        "Día": [1],
+        "Visitas A": [1000],
+        "Conversiones A": [conversions_a],
+        "Visitas B": [1000],
+        "Conversiones B": [conversions_b],
+    })
+
+
+def session_ab(
+    conversions_a: int, conversions_b: int, visits: int = 1000
+) -> pd.DataFrame:
+    rows = []
+    for group, conversions in (("A", conversions_a), ("B", conversions_b)):
+        for index in range(visits):
+            rows.append({
+                "Día": 1,
+                "SessionID": f"{group}-{index}",
+                "Conversiones A": float(index < conversions) if group == "A" else np.nan,
+                "Conversiones B": float(index < conversions) if group == "B" else np.nan,
+            })
+    return pd.DataFrame(rows)
+
+
 def engine_frame(engine: str, groups: tuple[str, ...]) -> pd.DataFrame:
     return session_frame(groups) if engine in SESSION_ENGINES else aggregate_frame(groups)
 
@@ -181,6 +206,13 @@ class EngineContractTests(unittest.TestCase):
             self.assertEqual(list(output.summary["variant"]), variants)
         else:
             self.assertGreaterEqual(len(output.summary), len(groups))
+        if engine in (ENGINE_0_1_SID, ENGINE_0_INF_SID):
+            self.assertTrue(all(
+                item["reverse_comparison"]["reference"] == item["variant"]
+                and item["reverse_comparison"]["compared"] == "A"
+                and item["reverse_comparison"]["is_best"] is False
+                for item in comparisons
+            ))
 
     def test_all_engines_support_ab_abc_and_abcde(self):
         for engine in ALL_ENGINES:
@@ -195,6 +227,16 @@ class EngineContractTests(unittest.TestCase):
                 output = run_silently(engine, engine_frame(engine, tuple("ABCDE")))
                 comparisons = output.comparisons or []
                 selected = [item for item in comparisons if item["is_best"]]
+                variant_winners = [
+                    item for item in comparisons
+                    if item.get("comparison_winner") == item["variant"]
+                ]
+                if not selected and engine in (ENGINE_0_1_SID, ENGINE_0_INF_SID):
+                    self.assertFalse(variant_winners)
+                    self.assertTrue(any(
+                        item.get("comparison_winner") == "A" for item in comparisons
+                    ))
+                    continue
                 self.assertEqual(len(selected), 1)
                 winners = [item for item in comparisons if item["favorable"] and item["significant"]]
                 pool = winners or [item for item in comparisons if item["favorable"]]
@@ -247,6 +289,174 @@ class EngineContractTests(unittest.TestCase):
                         self.assertTrue(all(item["interval"]["high"] is None for item in output.comparisons or []))
                     if interval_type == "izquierda":
                         self.assertTrue(all(item["interval"]["low"] is None for item in output.comparisons or []))
+
+    def test_pvalue_bilateral_recognizes_variant_control_and_no_winner(self):
+        cases = ((500, 560, "B"), (560, 500, "A"), (500, 510, None))
+        for conversions_a, conversions_b, expected_winner in cases:
+            with self.subTest(expected_winner=expected_winner):
+                output = run_silently(
+                    ENGINE_FREQ_PVALUE_NO_SID,
+                    aggregate_ab(conversions_a, conversions_b),
+                    freq_interval_type="centrado",
+                )
+                comparison = output.comparisons[0]
+                self.assertEqual(comparison["comparison_winner"], expected_winner)
+                self.assertEqual(
+                    comparison["comparison_status"],
+                    "Resultado concluyente" if expected_winner else "Sin ganador concluyente",
+                )
+                self.assertLessEqual(sum(item["is_best"] for item in output.comparisons), 1)
+                json.dumps(output.comparisons, allow_nan=False)
+
+    def test_pvalue_one_tailed_interpretation_is_unchanged(self):
+        frame = aggregate_ab(560, 500)
+        right = run_silently(
+            ENGINE_FREQ_PVALUE_NO_SID, frame, freq_interval_type="derecha"
+        ).comparisons[0]
+        left = run_silently(
+            ENGINE_FREQ_PVALUE_NO_SID, frame, freq_interval_type="izquierda"
+        ).comparisons[0]
+        self.assertEqual(right["interval"]["name"], "right_95")
+        self.assertEqual(right["comparison_status"], "Sin ganador concluyente")
+        self.assertEqual(left["interval"]["name"], "left_95")
+        self.assertEqual(left["comparison_status"], "Ganadora")
+
+    def test_accessible_bayesian_engines_recognize_both_winners(self):
+        for engine in (ENGINE_0_1_SID, ENGINE_0_INF_SID):
+            cases = ((500, 560, "B"), (560, 500, "A"), (500, 510, None))
+            for conversions_a, conversions_b, expected_winner in cases:
+                with self.subTest(engine=engine, expected_winner=expected_winner):
+                    output = run_silently(
+                        engine,
+                        session_ab(conversions_a, conversions_b, visits=10000),
+                        num_samples=10000,
+                    )
+                    comparison = output.comparisons[0]
+                    self.assertEqual(comparison["comparison_winner"], expected_winner)
+                    self.assertEqual(
+                        comparison["comparison_status"],
+                        "Resultado concluyente" if expected_winner else "Sin ganador concluyente",
+                    )
+                    probability = comparison["evidence"]["value"]
+                    reverse = comparison["reverse_comparison"]
+                    self.assertAlmostEqual(
+                        probability + reverse["evidence"]["value"], 1.0, places=12
+                    )
+                    self.assertAlmostEqual(
+                        comparison["difference"], -reverse["difference"], places=12
+                    )
+                    self.assertEqual(
+                        comparison["comparison_winner"], reverse["comparison_winner"]
+                    )
+                    self.assertFalse(reverse["is_best"])
+                    if expected_winner == "B":
+                        self.assertGreaterEqual(probability, 0.95)
+                    elif expected_winner == "A":
+                        self.assertLessEqual(probability, 0.05)
+                    else:
+                        self.assertGreater(probability, 0.05)
+                        self.assertLess(probability, 0.95)
+                    self.assertEqual(comparison["interval"]["name"], "centered_95")
+                    self.assertIsNotNone(comparison["interval"]["low"])
+                    self.assertIsNotNone(comparison["interval"]["high"])
+                    self.assertLess(comparison["interval"]["low"], 0)
+                    self.assertGreater(comparison["interval"]["high"], 0)
+                    self.assertLessEqual(sum(item["is_best"] for item in output.comparisons), 1)
+                    json.dumps(output.comparisons, allow_nan=False)
+
+    def test_bayesian_reverse_metrics_use_the_existing_samples(self):
+        import backend.engines.varios_disenos_sessionid_0_1 as beta
+        import backend.engines.varios_disenos_sessionid_0_inf as gamma
+
+        control_samples = np.array([1.0, 2.0, 3.0, 4.0])
+        variant_samples = np.array([2.1, 2.1, 2.1, 2.1])
+        forward_difference = variant_samples - control_samples
+        forward_uplift = forward_difference / control_samples
+        paso = {
+            "A": {"media": float(np.mean(control_samples)), "muestras": control_samples},
+            "B": {"media": float(np.mean(variant_samples)), "muestras": variant_samples},
+            "A_vs_B": {
+                "prob_mejor": float(np.mean(forward_difference > 0)),
+                "uplift_media": float(np.mean(forward_uplift)),
+                "uplift_std": float(np.std(forward_uplift)),
+                "ci_centered": np.percentile(forward_uplift, [2.5, 97.5]),
+                "ci_right": np.percentile(forward_uplift, [5.0, 100.0]),
+                "ci_left": np.percentile(forward_uplift, [0.0, 95.0]),
+                "diff": forward_difference,
+            },
+        }
+        expected_difference = control_samples - variant_samples
+        expected_uplift = expected_difference / variant_samples
+        expected_interval = np.percentile(expected_uplift, [2.5, 97.5]) * 100
+
+        for module in (beta, gamma):
+            with self.subTest(module=module.__name__):
+                comparison = module._build_lightweight_comparisons(paso, ("B",))[0]
+                reverse = comparison["reverse_comparison"]
+                self.assertAlmostEqual(
+                    reverse["uplift_pct"], float(np.mean(expected_uplift) * 100)
+                )
+                self.assertAlmostEqual(
+                    reverse["difference"], float(np.mean(expected_difference))
+                )
+                self.assertAlmostEqual(
+                    reverse["evidence"]["value"],
+                    float(np.mean(control_samples > variant_samples)),
+                )
+                np.testing.assert_allclose(
+                    [reverse["interval"]["low"], reverse["interval"]["high"]],
+                    expected_interval,
+                )
+                self.assertEqual(
+                    reverse["comparison_winner"], comparison["comparison_winner"]
+                )
+                self.assertFalse(reverse["is_best"])
+                json.dumps(comparison, allow_nan=False)
+
+    def test_control_is_global_winner_only_when_it_beats_every_variant(self):
+        output = run_silently(
+            ENGINE_FREQ_PVALUE_NO_SID,
+            pd.DataFrame({
+                "Día": [1],
+                "Visitas A": [1000], "Conversiones A": [560],
+                "Visitas B": [1000], "Conversiones B": [500],
+                "Visitas C": [1000], "Conversiones C": [510],
+            }),
+            freq_interval_type="centrado",
+        )
+        self.assertTrue(all(item["comparison_winner"] == "A" for item in output.comparisons))
+        self.assertFalse(any(item["is_best"] for item in output.comparisons))
+
+        mixed = run_silently(
+            ENGINE_FREQ_PVALUE_NO_SID,
+            pd.DataFrame({
+                "Día": [1],
+                "Visitas A": [1000], "Conversiones A": [560],
+                "Visitas B": [1000], "Conversiones B": [500],
+                "Visitas C": [1000], "Conversiones C": [555],
+            }),
+            freq_interval_type="centrado",
+        )
+        self.assertEqual([item["comparison_winner"] for item in mixed.comparisons], ["A", None])
+        self.assertFalse(any(item["is_best"] for item in mixed.comparisons))
+
+        opposite_winners = run_silently(
+            ENGINE_FREQ_PVALUE_NO_SID,
+            pd.DataFrame({
+                "Día": [1],
+                "Visitas A": [1000], "Conversiones A": [560],
+                "Visitas B": [1000], "Conversiones B": [500],
+                "Visitas C": [1000], "Conversiones C": [620],
+            }),
+            freq_interval_type="centrado",
+        )
+        self.assertEqual(
+            [item["comparison_winner"] for item in opposite_winners.comparisons],
+            ["A", "C"],
+        )
+        selected = [item for item in opposite_winners.comparisons if item["is_best"]]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["variant"], "C")
 
     def test_pdf_generation_with_five_groups(self):
         for engine in ALL_ENGINES:

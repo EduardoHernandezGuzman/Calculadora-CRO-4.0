@@ -75,6 +75,7 @@ function comparison(variant, options = {}) {
     favorable: options.favorable ?? true,
     significant: options.significant ?? false,
     comparison_status: options.significant ? 'Ganadora' : 'Sin ganador concluyente',
+    comparison_winner: options.comparisonWinner ?? (options.significant ? variant : null),
     selection_label: options.selectionLabel ?? null,
     is_best: options.isBest ?? false,
     metrics: {
@@ -84,6 +85,30 @@ function comparison(variant, options = {}) {
       se_diferencia: 0.0184,
     },
   };
+}
+
+function bayesianComparison(variant, options = {}) {
+  const direct = comparison(variant, {
+    ...options,
+    evidenceName: 'probability_superiority',
+  });
+  direct.reverse_comparison = {
+    reference: variant,
+    compared: 'A',
+    reference_value: direct.variant_value,
+    compared_value: direct.control_value,
+    uplift_pct: -10.71,
+    difference: -direct.difference,
+    evidence: {
+      name: 'probability_superiority',
+      value: 1 - direct.evidence.value,
+    },
+    interval: { name: 'centered_95', low: -22, high: 1.5 },
+    comparison_winner: direct.comparison_winner,
+    comparison_status: direct.comparison_status,
+    is_best: false,
+  };
+  return direct;
 }
 
 element('step3-subtitle');
@@ -295,6 +320,9 @@ context.comparisons = [
 ];
 context.summary = context.comparisons.map(item => ({ control: 'A', variant: item.variant }));
 let cards = evaluate('renderComparisonCards(comparisons, summary)');
+if ((cards.match(/<article class="comparison-card/g) || []).length !== 4 || cards.includes('data-mirror="true"')) {
+  throw new Error('Frecuentista no mantiene una tarjeta por comparación.');
+}
 if ((cards.match(/data-is-best="true"/g) || []).length !== 1) throw new Error('Destacado principal inválido.');
 if (!cards.includes('A vs B') || !cards.includes('A vs E')) throw new Error('Faltan tarjetas multivariantes.');
 if (!cards.includes('> 1.20%') || !cards.includes('< -1.40%')) throw new Error('Intervalos null incorrectos.');
@@ -304,6 +332,41 @@ if (!cards.includes('Límite inferior (IC 95 %)') || !cards.includes('Límite su
 if (cards.includes('[-2.00%, 32.00%]')) throw new Error('La tarjeta mantiene el formato conjunto del intervalo centrado.');
 if (/\b(null|NaN|undefined)\b/.test(cards)) throw new Error('Se muestran valores técnicos vacíos.');
 if (!cards.includes('Resultado concluyente')) throw new Error('Falta el estado concluyente no seleccionado.');
+for (const [variants, expectedCards] of [[['B'], 2], [['B', 'C'], 4], [['B', 'C', 'D', 'E'], 8]]) {
+  context.bayesianMirrorComparisons = variants.map((variant, index) => bayesianComparison(variant, {
+    isBest: index === 0,
+    selectionLabel: index === 0 ? 'Ganadora' : null,
+    significant: index === 0,
+    comparisonWinner: index === 0 ? variant : null,
+  }));
+  context.bayesianMirrorSummary = variants.map(variant => ({ control: 'A', variant }));
+  const mirrorCards = evaluate('renderComparisonCards(bayesianMirrorComparisons, bayesianMirrorSummary)');
+  if ((mirrorCards.match(/<article class="comparison-card/g) || []).length !== expectedCards) {
+    throw new Error(`Bayesiano con ${variants.length} variantes no muestra ${expectedCards} tarjetas.`);
+  }
+  if ((mirrorCards.match(/data-mirror="true"/g) || []).length !== variants.length) {
+    throw new Error('Falta alguna tarjeta espejo bayesiana.');
+  }
+  if ((mirrorCards.match(/data-is-best="true"/g) || []).length !== 1 ||
+      (mirrorCards.match(/data-mirror="true"[^>]*data-is-best="true"/g) || []).length) {
+    throw new Error('Una tarjeta espejo participa en la selección global.');
+  }
+  if (!mirrorCards.includes('B vs A') || mirrorCards.includes('B vs C')) {
+    throw new Error('Las comparaciones espejo bayesianas son incorrectas.');
+  }
+  const renderedMirrors = mirrorCards.match(/<article class="comparison-card comparison-mirror[\s\S]*?<\/article>/g) || [];
+  if (!renderedMirrors[0] || !renderedMirrors[0].includes('Probabilidad de que A supere a B')) {
+    throw new Error('La tarjeta espejo no muestra la probabilidad inversa.');
+  }
+  if (renderedMirrors.some(card =>
+    card.includes('Referencia ') ||
+    card.includes('Grupo comparado ') ||
+    card.includes('Uplift de ') ||
+    card.includes('comparison-interval')
+  )) {
+    throw new Error('La tarjeta espejo muestra métricas adicionales.');
+  }
+}
 context.bayesianComparisons = [comparison('B', { evidenceName: 'probability_superiority', interval: { name: 'credible_interval', low: 45.12, high: 97.97 } })];
 context.bayesianCards = evaluate("renderComparisonCards(bayesianComparisons, [{ control: 'A', variant: 'B' }])");
 if (!context.bayesianCards.includes('Límite inferior (IC 95 %)') || !context.bayesianCards.includes('45.12%') ||
@@ -338,6 +401,37 @@ if (!evaluate('renderSelectionOverview(candidate)').includes('Mejor candidata: C
 context.noCandidate = [comparison('B', { favorable: false }), comparison('C', { favorable: false })];
 if (!evaluate('renderSelectionOverview(noCandidate)').includes('No hay una variante ganadora concluyente')) {
   throw new Error('Estado sin ganador incorrecto.');
+}
+context.controlWinner = [comparison('B', {
+  favorable: false,
+  significant: true,
+  comparisonWinner: 'A',
+})];
+context.controlWinner[0].comparison_status = 'Resultado concluyente';
+context.controlWinner[0].is_best = false;
+const controlOverview = evaluate('renderSelectionOverview(controlWinner)');
+const controlCards = evaluate("renderComparisonCards(controlWinner, [{ control: 'A', variant: 'B' }])");
+if (!controlOverview.includes('Ganador: Control A') ||
+    !controlOverview.includes('El control supera de forma concluyente a la variante analizada.')) {
+  throw new Error('El resumen no muestra al control A como ganador.');
+}
+if (!controlCards.includes('Ganador: Control A') ||
+    !controlCards.includes('La variante B es significativamente peor que A.')) {
+  throw new Error('La tarjeta no muestra correctamente la victoria del control A.');
+}
+context.variantWinner = [comparison('B', {
+  favorable: true,
+  significant: true,
+  comparisonWinner: 'B',
+  isBest: true,
+  selectionLabel: 'Ganadora',
+})];
+if (!evaluate('renderSelectionOverview(variantWinner)').includes('Variante ganadora: B')) {
+  throw new Error('La victoria concluyente de una variante ha cambiado.');
+}
+context.mixedControlResult = [context.controlWinner[0], comparison('C', { favorable: false })];
+if (!evaluate('renderSelectionOverview(mixedControlResult)').includes('No hay una variante ganadora concluyente')) {
+  throw new Error('Una victoria parcial de A se presenta incorrectamente como victoria global.');
 }
 
 element('results-container');
