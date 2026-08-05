@@ -172,7 +172,7 @@ Una comparación puede ser individualmente concluyente sin recibir el destacado 
 
 El control A también puede ser ganador. En el frecuentista bilateral, el signo de una diferencia significativa determina si gana A o la variante. En los motores bayesianos con Session ID, una probabilidad de superioridad de la variante igual o superior al 95 % declara ganadora a la variante; una probabilidad igual o inferior al 5 % declara ganador al control A.
 
-Los motores bayesianos con Session ID añaden `reverse_comparison` a cada A vs variante. La interfaz muestra junto a la tarjeta principal una tarjeta inversa B vs A, C vs A, etc., que contiene únicamente la probabilidad de que A supere a la variante y el ganador absoluto. Estas tarjetas son informativas: no participan en `is_best`, no duplican el resumen y no generan comparaciones entre variantes.
+Los cuatro motores bayesianos añaden `reverse_comparison` a cada A vs variante. La interfaz muestra junto a la tarjeta principal una tarjeta inversa B vs A, C vs A, etc., que contiene únicamente la probabilidad de que A supere a la variante y el ganador absoluto. Estas tarjetas son informativas: no participan en `is_best`, no duplican el resumen y no generan comparaciones entre variantes.
 
 ### Comparaciones múltiples
 
@@ -257,7 +257,7 @@ Opciones principales de `config`:
 
 La respuesta puede incluir `summary`, `figures`, `pdf_bytes`, `log_text`, `comparisons` y `srm`.
 
-`comparisons` contiene un registro ligero y serializable por cada A vs variante, con tasas o medias, uplift, evidencia, intervalo, `comparison_winner`, estado estadístico, `selection_label` e `is_best`. Como máximo un registro puede tener `is_best=true`. En los motores bayesianos con Session ID, cada registro incluye además un bloque ligero `reverse_comparison`; nunca se añade como un elemento independiente de la colección.
+`comparisons` contiene un registro ligero y serializable por cada A vs variante, con tasas o medias, uplift, evidencia, intervalo, `comparison_winner`, estado estadístico, `selection_label` e `is_best`. Como máximo un registro puede tener `is_best=true`. En los cuatro motores bayesianos, cada registro incluye además un bloque ligero `reverse_comparison`; nunca se añade como un elemento independiente de la colección.
 
 `srm` contiene el resultado global del reparto de muestra:
 

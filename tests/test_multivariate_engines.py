@@ -206,7 +206,7 @@ class EngineContractTests(unittest.TestCase):
             self.assertEqual(list(output.summary["variant"]), variants)
         else:
             self.assertGreaterEqual(len(output.summary), len(groups))
-        if engine in (ENGINE_0_1_SID, ENGINE_0_INF_SID):
+        if engine in BAYES_ENGINES:
             self.assertTrue(all(
                 item["reverse_comparison"]["reference"] == item["variant"]
                 and item["reverse_comparison"]["compared"] == "A"
@@ -365,6 +365,8 @@ class EngineContractTests(unittest.TestCase):
                     json.dumps(output.comparisons, allow_nan=False)
 
     def test_bayesian_reverse_metrics_use_the_existing_samples(self):
+        import backend.engines.varios_disenos_0_1 as beta_no_sid
+        import backend.engines.varios_disenos_0_inf as gamma_no_sid
         import backend.engines.varios_disenos_sessionid_0_1 as beta
         import backend.engines.varios_disenos_sessionid_0_inf as gamma
 
@@ -383,13 +385,14 @@ class EngineContractTests(unittest.TestCase):
                 "ci_right": np.percentile(forward_uplift, [5.0, 100.0]),
                 "ci_left": np.percentile(forward_uplift, [0.0, 95.0]),
                 "diff": forward_difference,
+                "tipo_ic": "centrado",
             },
         }
         expected_difference = control_samples - variant_samples
         expected_uplift = expected_difference / variant_samples
         expected_interval = np.percentile(expected_uplift, [2.5, 97.5]) * 100
 
-        for module in (beta, gamma):
+        for module in (beta_no_sid, gamma_no_sid, beta, gamma):
             with self.subTest(module=module.__name__):
                 comparison = module._build_lightweight_comparisons(paso, ("B",))[0]
                 reverse = comparison["reverse_comparison"]

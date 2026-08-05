@@ -407,8 +407,7 @@ def _build_lightweight_comparisons(
             float(stats["prob_mejor"]) >= 0.95
             and float(stats["ci_centered"][0]) > 0
         )
-        comparisons.append(
-            make_comparison_record(
+        record = make_comparison_record(
                 variant=variant,
                 control_value=float(paso["A"]["media"]),
                 variant_value=float(paso[variant]["media"]),
@@ -435,7 +434,46 @@ def _build_lightweight_comparisons(
                     ],
                 },
             )
+        control_samples = np.asarray(paso["A"]["muestras"], dtype=float)
+        variant_samples = np.asarray(paso[variant]["muestras"], dtype=float)
+        reverse_difference_samples = control_samples - variant_samples
+        reverse_uplift_samples = np.divide(
+            reverse_difference_samples,
+            variant_samples,
+            out=np.zeros_like(reverse_difference_samples),
+            where=variant_samples != 0,
         )
+        reverse_interval = np.percentile(reverse_uplift_samples, [2.5, 97.5])
+        reverse_values = (
+            float(np.mean(reverse_uplift_samples) * 100),
+            float(np.mean(reverse_difference_samples)),
+            float(np.mean(control_samples > variant_samples)),
+            float(reverse_interval[0] * 100),
+            float(reverse_interval[1] * 100),
+        )
+        if not all(np.isfinite(value) for value in reverse_values):
+            raise ValueError("La comparación bayesiana inversa contiene valores no finitos.")
+        record["reverse_comparison"] = {
+            "reference": variant,
+            "compared": "A",
+            "reference_value": float(paso[variant]["media"]),
+            "compared_value": float(paso["A"]["media"]),
+            "uplift_pct": reverse_values[0],
+            "difference": reverse_values[1],
+            "evidence": {
+                "name": "probability_superiority",
+                "value": reverse_values[2],
+            },
+            "interval": {
+                "name": "centered_95",
+                "low": reverse_values[3],
+                "high": reverse_values[4],
+            },
+            "comparison_winner": record["comparison_winner"],
+            "comparison_status": record["comparison_status"],
+            "is_best": False,
+        }
+        comparisons.append(record)
 
     winners = [
         item for item in comparisons
