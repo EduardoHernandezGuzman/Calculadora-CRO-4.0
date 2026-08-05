@@ -32,11 +32,6 @@ from backend.core.experiment_groups import (
     mark_best_comparison,
 )
 
-try:
-    import pymc as pm  # noqa: F401
-except Exception:
-    pm = None  # type: ignore
-
 warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
