@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import csv
 import io
 import json
 import os
@@ -24,6 +25,7 @@ from backend.core.engine_router import (
     run_engine,
 )
 from backend.core.srm import calculate_srm
+from backend.core.input_validation import validate_analysis_input
 
 router = APIRouter()
 
@@ -110,10 +112,75 @@ async def analyze(
     engine_key: str = Form(...),
     config: str = Form("{}"),
 ):
-    contents = await file.read()
-    df = pd.read_csv(io.BytesIO(contents))
+    try:
+        contents = await file.read()
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="No se ha podido leer el archivo CSV.") from exc
+    try:
+        decoded = contents.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="No se ha podido leer el CSV. Guárdalo como CSV UTF-8 y vuelve a intentarlo.",
+        ) from exc
+    try:
+        expected_columns = None
+        for row in csv.reader(io.StringIO(decoded), strict=True):
+            if not row:
+                continue
+            if expected_columns is None:
+                expected_columns = len(row)
+            elif len(row) != expected_columns:
+                raise csv.Error("Las filas no tienen el mismo número de columnas.")
+    except csv.Error as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se ha podido interpretar el CSV. Comprueba que utiliza comas "
+                "como separador y que las filas tienen el mismo número de columnas."
+            ),
+        ) from exc
+    try:
+        df = pd.read_csv(io.StringIO(decoded))
+    except pd.errors.EmptyDataError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="No se ha podido leer el CSV porque está vacío.",
+        ) from exc
+    except pd.errors.ParserError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se ha podido interpretar el CSV. Comprueba que utiliza comas "
+                "como separador y que las filas tienen el mismo número de columnas."
+            ),
+        ) from exc
+    if len(df.columns) == 1 and any(separator in str(df.columns[0]) for separator in (";", "\t")):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se ha podido interpretar el CSV. Comprueba que utiliza comas "
+                "como separador y que las filas tienen el mismo número de columnas."
+            ),
+        )
 
-    config_dict = json.loads(config) if isinstance(config, str) else config
+    try:
+        config_dict = json.loads(config) if isinstance(config, str) else config
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="La configuración del análisis no contiene un JSON válido.",
+        ) from exc
+    if not isinstance(config_dict, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="La configuración del análisis debe ser un objeto JSON.",
+        )
+    if engine_key not in ENGINES_META:
+        raise HTTPException(
+            status_code=400,
+            detail="El motor estadístico seleccionado no existe.",
+        )
 
     if "include_ai" in config_dict:
         config_dict["include_ai"] = str(config_dict.get("include_ai", "false")).lower() in ("true", "1", "yes")
@@ -122,11 +189,15 @@ async def analyze(
 
     try:
         session_id = _resolve_session_id(engine_key, config_dict)
+        df = validate_analysis_input(
+            df,
+            engine_key=engine_key,
+            session_id=session_id,
+        )
         srm_result = calculate_srm(df, session_id=session_id)
-    except ValueError as exc:
+        out = run_engine(engine_key, df, config_dict)
+    except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    out = run_engine(engine_key, df, config_dict)
 
     summary_list = None
     if out.summary is not None:

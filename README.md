@@ -191,6 +191,8 @@ En esta versión el reparto esperado es uniforme y se utiliza `alpha = 0.01`. Se
 - Los valores cero cuentan como observaciones y los `NaN` no se cuentan.
 - No se deduplican valores de `SessionID`; cada fila se considera una observación.
 
+Antes de ejecutar SRM o un motor, la API valida que las columnas obligatorias no tengan vacíos, que visitas y conversiones sean enteros finitos y no negativos, y que los valores binarios sean 0 o 1. En Beta-Binomial y Frecuentista las conversiones no pueden superar las visitas; Gamma-Poisson permite superarlas porque representa conteos múltiples. Las variantes por sesión completamente vacías se ignoran. Los `SessionID` duplicados no se deduplican: la política vigente considera cada fila una observación independiente.
+
 SRM todavía no se incluye en los prompts de IA ni en el PDF. Una futura versión podría incorporar ratios esperadas configurables y añadir el resultado a esos informes sin cambiar los cálculos de los motores.
 
 ## Archivos de ejemplo

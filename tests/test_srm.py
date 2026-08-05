@@ -202,7 +202,12 @@ class SrmApiTests(unittest.TestCase):
         self.assertFalse(response.json()["srm"]["has_srm"])
 
     def test_api_supports_legacy_session_ab(self):
-        legacy = pd.DataFrame({"A": [0, 1, 0, np.nan], "B": [1, 0, 0, 1]})
+        legacy = pd.DataFrame({
+            "Día": [1, 1, 1, 1],
+            "SessionID": ["S-1", "S-2", "S-3", "S-4"],
+            "A": [0, 1, 0, np.nan],
+            "B": [1, 0, 0, 1],
+        })
         response = self.request(
             "freq_pvalue_sid", legacy, True
         )
