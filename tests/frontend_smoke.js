@@ -113,17 +113,34 @@ function bayesianComparison(variant, options = {}) {
 
 element('step3-subtitle');
 element('step3-subtitle-extra');
+element('step2-enfoque');
 context.window.State.session_id = null;
 context.window.State.tipo_valores = null;
 evaluate("selectModel('bayesiano')");
-if (context.shownStep !== 3 || context.window.State.wizard_step !== 3) {
-  throw new Error('El flujo bayesiano no salta directamente a la pantalla de conversiones.');
+if (context.shownStep !== 2 || context.window.State.wizard_step !== 2) {
+  throw new Error('El flujo bayesiano no muestra la pantalla de Session ID.');
 }
-if (context.window.State.session_id !== true) throw new Error('El flujo bayesiano no fija session_id=true.');
+if (context.window.State.session_id !== null) throw new Error('El flujo bayesiano fija Session ID antes de que el usuario elija.');
+evaluate('selectSessionId(true)');
+if (context.shownStep !== 3 || context.window.State.wizard_step !== 3 || context.window.State.session_id !== true) {
+  throw new Error('Tengo Session ID no abre las conversiones bayesianas con session_id=true.');
+}
 context.window.State.tipo_valores = '0_1';
-if (evaluate('getEngineKey()') !== 'bayes_0_1_sid') throw new Error('Conversiones únicas no mantienen el motor Bayesiano con Session ID.');
+if (evaluate('getEngineKey()') !== 'bayes_0_1_sid') throw new Error('Conversiones únicas con Session ID resuelven un motor incorrecto.');
 context.window.State.tipo_valores = '0_inf';
-if (evaluate('getEngineKey()') !== 'bayes_0_inf_sid') throw new Error('Conversiones múltiples no mantienen el motor Bayesiano con Session ID.');
+if (evaluate('getEngineKey()') !== 'bayes_0_inf_sid') throw new Error('Conversiones múltiples con Session ID resuelven un motor incorrecto.');
+evaluate("selectModel('bayesiano')");
+if (context.window.State.session_id !== null || context.shownStep !== 2) {
+  throw new Error('Volver a seleccionar Bayesiano no reinicia la elección de Session ID.');
+}
+evaluate('selectSessionId(false)');
+if (context.shownStep !== 3 || context.window.State.wizard_step !== 3 || context.window.State.session_id !== false) {
+  throw new Error('No tengo Session ID no abre las conversiones bayesianas con session_id=false.');
+}
+context.window.State.tipo_valores = '0_1';
+if (evaluate('getEngineKey()') !== 'bayes_0_1_no_sid') throw new Error('Conversiones únicas sin Session ID resuelven un motor incorrecto.');
+context.window.State.tipo_valores = '0_inf';
+if (evaluate('getEngineKey()') !== 'bayes_0_inf_no_sid') throw new Error('Conversiones múltiples sin Session ID resuelven un motor incorrecto.');
 element('freq-tail-choice');
 element('freq-direction-choice');
 context.window.State.session_id = true;
@@ -146,7 +163,9 @@ if ((modelSelectionStep.match(/onclick="selectModel\('/g) || []).length !== 2 ||
   throw new Error('El selector principal no contiene únicamente dos opciones centradas.');
 }
 const bayesStep = indexHtml.slice(indexHtml.indexOf('id="step-3-bayes"'), indexHtml.indexOf('id="step-3-freq"'));
-if (bayesStep.includes('onclick="goToStep(2)"')) throw new Error('El flujo bayesiano permite volver a la pantalla de Session ID.');
+if (!bayesStep.includes('onclick="goToStep(2)"') || bayesStep.includes('onclick="goToStep(1)"')) {
+  throw new Error('Volver desde conversiones bayesianas no regresa a Session ID.');
+}
 const freqStep = indexHtml.slice(indexHtml.indexOf('id="step-3-freq"'), indexHtml.indexOf('id="step-4"'));
 if (!freqStep.includes('onclick="goToStep(1)"') || freqStep.includes('onclick="goToStep(2)"')) {
   throw new Error('Volver desde la hipótesis frecuentista no regresa directamente al selector de enfoque.');

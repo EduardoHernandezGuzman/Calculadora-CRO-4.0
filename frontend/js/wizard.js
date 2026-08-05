@@ -40,9 +40,8 @@ function isRouteReady() {
 function selectModel(value) {
   window.State.enfoque = value;
   if (value === 'bayesiano') {
-    window.State.session_id = true;
-    goToStep(3);
-    showWizardStep3Bayes();
+    window.State.session_id = null;
+    goToStep(2);
     return;
   }
   window.State.session_id = false;
