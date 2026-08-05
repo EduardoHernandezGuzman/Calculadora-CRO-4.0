@@ -5,8 +5,9 @@ import csv
 import io
 import json
 import os
-from typing import Optional
+from typing import Any, Iterable, Optional
 
+import matplotlib.pyplot as plt
 import pandas as pd
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
@@ -58,6 +59,24 @@ def _convert_numpy(obj):
     if isinstance(obj, (int, float, str, bool, type(None))):
         return obj
     return str(obj)
+
+
+def _serialize_figures(figures: Iterable[Any]) -> list[str]:
+    figures = list(figures)
+    serialized = []
+    try:
+        for fig in figures:
+            buf = io.BytesIO()
+            try:
+                fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+                serialized.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+            finally:
+                buf.close()
+        return serialized
+    finally:
+        # The API is the final consumer after the engines have generated any PDF.
+        for fig in figures:
+            plt.close(fig)
 
 
 @router.get("/health")
@@ -206,14 +225,7 @@ async def analyze(
         ).to_dict(orient="records")
         summary_list = _convert_numpy(summary_list)
 
-    figures_b64 = None
-    if out.figures:
-        figures_b64 = []
-        for fig in out.figures:
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-            buf.seek(0)
-            figures_b64.append(base64.b64encode(buf.read()).decode("utf-8"))
+    figures_b64 = _serialize_figures(out.figures) if out.figures else None
 
     pdf_b64 = None
     if out.pdf_bytes:
