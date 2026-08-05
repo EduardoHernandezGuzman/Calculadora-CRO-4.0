@@ -77,12 +77,14 @@ def session_frame(groups: tuple[str, ...], visits: int = 80) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def aggregate_ab(conversions_a: int, conversions_b: int) -> pd.DataFrame:
+def aggregate_ab(
+    conversions_a: int, conversions_b: int, visits: int = 1000
+) -> pd.DataFrame:
     return pd.DataFrame({
         "Día": [1],
-        "Visitas A": [1000],
+        "Visitas A": [visits],
         "Conversiones A": [conversions_a],
-        "Visitas B": [1000],
+        "Visitas B": [visits],
         "Conversiones B": [conversions_b],
     })
 
@@ -321,14 +323,19 @@ class EngineContractTests(unittest.TestCase):
         self.assertEqual(left["interval"]["name"], "left_95")
         self.assertEqual(left["comparison_status"], "Ganadora")
 
-    def test_accessible_bayesian_engines_recognize_both_winners(self):
-        for engine in (ENGINE_0_1_SID, ENGINE_0_INF_SID):
+    def test_all_bayesian_engines_use_the_same_probability_thresholds(self):
+        for engine in BAYES_ENGINES:
             cases = ((500, 560, "B"), (560, 500, "A"), (500, 510, None))
             for conversions_a, conversions_b, expected_winner in cases:
                 with self.subTest(engine=engine, expected_winner=expected_winner):
+                    frame = (
+                        session_ab(conversions_a, conversions_b, visits=10000)
+                        if engine in SESSION_ENGINES
+                        else aggregate_ab(conversions_a, conversions_b, visits=10000)
+                    )
                     output = run_silently(
                         engine,
-                        session_ab(conversions_a, conversions_b, visits=10000),
+                        frame,
                         num_samples=10000,
                     )
                     comparison = output.comparisons[0]

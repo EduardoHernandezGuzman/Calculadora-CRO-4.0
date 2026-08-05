@@ -402,11 +402,14 @@ def _build_lightweight_comparisons(
     comparisons = []
     for variant in variants:
         stats = paso[f"A_vs_{variant}"]
+        probability_variant_better = float(stats["prob_mejor"])
         favorable = float(stats["uplift_media"]) > 0
-        significant = (
-            float(stats["prob_mejor"]) >= 0.95
-            and float(stats["ci_centered"][0]) > 0
-        )
+        comparison_winner = None
+        if probability_variant_better >= 0.95:
+            comparison_winner = variant
+        elif probability_variant_better <= 0.05:
+            comparison_winner = "A"
+        significant = comparison_winner is not None
         record = make_comparison_record(
                 variant=variant,
                 control_value=float(paso["A"]["media"]),
@@ -422,6 +425,7 @@ def _build_lightweight_comparisons(
                 ],
                 favorable=favorable,
                 significant=significant,
+                comparison_winner=comparison_winner,
                 metrics={
                     "uplift_std_pct": float(stats["uplift_std"]) * 100,
                     "ci_floor_pct": [
@@ -477,8 +481,10 @@ def _build_lightweight_comparisons(
 
     winners = [
         item for item in comparisons
-        if item["comparison_status"] == STATUS_WINNER
+        if item["comparison_winner"] == item["variant"]
     ]
+    if not winners and any(item["comparison_winner"] == "A" for item in comparisons):
+        return mark_best_comparison(comparisons, None, winner=False)
     candidates = winners or [item for item in comparisons if item["favorable"]]
     if not candidates:
         return mark_best_comparison(comparisons, None, winner=False)
