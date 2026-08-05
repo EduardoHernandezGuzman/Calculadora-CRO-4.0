@@ -292,7 +292,8 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None):
     config = config or {}
 
     num_samples = int(config.get("num_samples", 20000))
-    generate_pdf = bool(config.get("generate_pdf", False))
+    generate_figures = bool(config.get("generate_figures", True))
+    generate_pdf = bool(config.get("generate_pdf", False)) and generate_figures
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
     layout = detect_session_groups(df.columns)
@@ -353,13 +354,14 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None):
                 }
             )
 
-        fig, ax = plt.subplots(figsize=(8, 4))
-        for grupo in grupos:
-            sns.kdeplot(paso[grupo]["muestras"], fill=True, label=f"Grupo {grupo}", ax=ax)
-        ax.set_title(f"{dia} - Posterior Gamma")
-        ax.legend()
-        figures.append(fig)
-        plt.close(fig)
+        if generate_figures:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            for grupo in grupos:
+                sns.kdeplot(paso[grupo]["muestras"], fill=True, label=f"Grupo {grupo}", ax=ax)
+            ax.set_title(f"{dia} - Posterior Gamma")
+            ax.legend()
+            figures.append(fig)
+            plt.close(fig)
 
     summary_df = pd.DataFrame(summary_rows)
     comparisons = (

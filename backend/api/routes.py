@@ -205,6 +205,10 @@ async def analyze(
         config_dict["include_ai"] = str(config_dict.get("include_ai", "false")).lower() in ("true", "1", "yes")
     if "generate_pdf" in config_dict:
         config_dict["generate_pdf"] = str(config_dict.get("generate_pdf", "false")).lower() in ("true", "1", "yes")
+    if "generate_figures" in config_dict:
+        config_dict["generate_figures"] = str(config_dict.get("generate_figures", "true")).lower() in ("true", "1", "yes")
+    if config_dict.get("generate_figures", True) is False:
+        config_dict["generate_pdf"] = False
 
     try:
         session_id = _resolve_session_id(engine_key, config_dict)

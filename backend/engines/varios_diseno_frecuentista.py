@@ -484,7 +484,8 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     """
     config = config or {}
     n_iteraciones = int(config.get("n_iteraciones", 10000))
-    generate_pdf = bool(config.get("generate_pdf", False))
+    generate_figures = bool(config.get("generate_figures", True))
+    generate_pdf = bool(config.get("generate_pdf", False)) and generate_figures
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
     interval_type = str(config.get("freq_interval_type", "centrado"))
@@ -516,7 +517,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                 if fig_diff is not None:
                     figures.append(fig_diff)
         pdf_bytes = bio.getvalue()
-    else:
+    elif generate_figures:
         for analysis in analyses:
             fig_diff = analysis.generar_reporte(pdf=None)
             if fig_diff is not None:

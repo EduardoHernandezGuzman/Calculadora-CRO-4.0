@@ -480,6 +480,43 @@ class EngineContractTests(unittest.TestCase):
                 self.assertGreater(len(output.pdf_bytes or b""), 1000)
                 self.assertGreaterEqual(len(output.figures or []), 1)
 
+    def test_generate_figures_defaults_true_and_can_disable_all_graph_work(self):
+        for engine in ALL_ENGINES:
+            for groups in (tuple("AB"), tuple("ABCDE")):
+                frame = engine_frame(engine, groups)
+                with self.subTest(engine=engine, groups=groups, mode="default"):
+                    default_output = run_silently(engine, frame)
+                    explicit_output = run_silently(engine, frame, generate_figures=True)
+                    self.assertGreater(len(default_output.figures or []), 0)
+                    self.assertEqual(len(default_output.figures), len(explicit_output.figures))
+
+                baseline_figures = set(plt.get_fignums())
+                with self.subTest(engine=engine, groups=groups, mode="disabled"), patch(
+                    "matplotlib.pyplot.figure",
+                    side_effect=AssertionError("No debe crearse una figura"),
+                ), patch(
+                    "matplotlib.pyplot.subplots",
+                    side_effect=AssertionError("No debe crearse una figura"),
+                ), patch(
+                    "seaborn.kdeplot",
+                    side_effect=AssertionError("No debe ejecutarse KDE"),
+                ):
+                    disabled_output = run_silently(
+                        engine,
+                        frame,
+                        generate_figures=False,
+                        generate_pdf=True,
+                    )
+
+                self.assertEqual(disabled_output.figures, [])
+                self.assertIsNone(disabled_output.pdf_bytes)
+                self.assertEqual(set(plt.get_fignums()), baseline_figures)
+                pd.testing.assert_frame_equal(default_output.summary, disabled_output.summary)
+                self.assertEqual(default_output.comparisons, disabled_output.comparisons)
+                self.assertIsNotNone(disabled_output.summary)
+                self.assertTrue(disabled_output.comparisons)
+
+
     def test_ai_prompt_contains_every_control_comparison(self):
         import backend.engines.varios_diseno_frecuentista as bootstrap
         import backend.engines.varios_diseno_frecuentista_pvalue as pvalue
@@ -500,6 +537,7 @@ class EngineContractTests(unittest.TestCase):
                         engine,
                         engine_frame(engine, tuple("ABCDE")),
                         include_ai=True,
+                        generate_figures=False,
                         openai_api_key="fake",
                     )
 

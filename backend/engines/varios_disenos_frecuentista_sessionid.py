@@ -377,7 +377,8 @@ def _summary_row(r: Dict[str, Any]) -> Dict[str, Any]:
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     config = config or {}
     n_iteraciones = int(config.get("n_iteraciones", 10000))
-    generate_pdf = bool(config.get("generate_pdf", False))
+    generate_figures = bool(config.get("generate_figures", True))
+    generate_pdf = bool(config.get("generate_pdf", False)) and generate_figures
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
     interval_type = str(config.get("freq_interval_type", "centrado"))
@@ -413,7 +414,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                     figs.append(fig_ia)
         pdf_bytes = buffer.getvalue()
         buffer.close()
-    else:
+    elif generate_figures:
         for analysis in analyses:
             figs.extend(analysis.generar_reporte(pdf=None))
 

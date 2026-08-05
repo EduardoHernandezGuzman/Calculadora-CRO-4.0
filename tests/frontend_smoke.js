@@ -485,13 +485,46 @@ if (!redBanner.includes('Se detectó SRM') || !redBanner.includes('1.23e-8')) th
 if (!evaluate('renderSrmBanner(null)').includes('Chequeo SRM no disponible')) throw new Error('Una respuesta antigua sin SRM rompe el frontend.');
 
 element('chk-pdf').checked = false;
+element('chk-figures').checked = true;
 element('chk-ai').checked = false;
 element('input-ai-key').value = '';
 context.window.State.enfoque = 'frecuentista';
 context.window.State.freq_interval_type = 'izquierda';
 const config = evaluate('buildAnalysisConfig()');
+if (config.generate_figures !== true) throw new Error('La generación de gráficos no está activa por defecto.');
 if (config.freq_interval_type !== 'izquierda') throw new Error('freq_interval_type no se transporta.');
 if (config.session_id !== true) throw new Error('session_id no se transporta.');
+
+const executionOptions = evaluate("renderExecutionOptions('bayesiano')");
+if (!executionOptions.includes('id="chk-figures" checked') || !executionOptions.includes('Generar gr&aacute;ficos')) {
+  throw new Error('Falta el checkbox de gráficos activado por defecto.');
+}
+element('pdf-requires-figures');
+elements['chk-pdf'].checked = true;
+elements['chk-figures'].checked = false;
+evaluate('toggleFigureOptions()');
+if (elements['chk-pdf'].checked || !elements['chk-pdf'].disabled) {
+  throw new Error('Desactivar gráficos no desactiva y desmarca el PDF.');
+}
+if (elements['pdf-requires-figures'].style.display !== 'block') {
+  throw new Error('No se informa de que el PDF requiere gráficos.');
+}
+const noFiguresConfig = evaluate('buildAnalysisConfig()');
+if (noFiguresConfig.generate_figures !== false || noFiguresConfig.generate_pdf !== false) {
+  throw new Error('El frontend envía una configuración gráfica/PDF inconsistente.');
+}
+context.outputWithoutFigures = { ...context.output, figures: [], pdf_bytes: null };
+evaluate('displayResults(outputWithoutFigures)');
+const renderedWithoutFigures = elements['results-container'].innerHTML;
+if (renderedWithoutFigures.includes('tab-graficos') || renderedWithoutFigures.includes("switchTab('graficos'")) {
+  throw new Error('La pestaña Gráficos aparece sin figuras.');
+}
+if (!renderedWithoutFigures.includes('tab-resumen') || !renderedWithoutFigures.includes('tab-consola')) {
+  throw new Error('Ocultar gráficos elimina Resumen o Salida tipo consola.');
+}
+if (!evaluate('runManualAnalysis.toString()').includes('analyzeFile') || !evaluate('analyzeFile.toString()').includes('buildAnalysisConfig')) {
+  throw new Error('La entrada manual y CSV no comparten generate_figures.');
+}
 
 const css = fs.readFileSync('frontend/css/styles.css', 'utf8');
 if (!css.includes('@media (max-width: 700px)') || !css.includes('.comparisons-grid')) {

@@ -193,6 +193,21 @@ class InputValidationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertNotIn("internal", response.text)
 
+    def test_disabling_figures_also_disables_pdf_before_running_engine(self):
+        csv = (
+            "Día,Visitas A,Conversiones A,Visitas B,Conversiones B\n"
+            "1,10,1,10,2\n"
+        )
+        response, mocked = self.post(
+            csv,
+            "bayes_0_1_no_sid",
+            {"generate_figures": False, "generate_pdf": True},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        config = mocked.call_args.args[2]
+        self.assertIs(config["generate_figures"], False)
+        self.assertIs(config["generate_pdf"], False)
+
 
 if __name__ == "__main__":
     unittest.main()

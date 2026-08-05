@@ -406,7 +406,8 @@ def _build_lightweight_comparisons(
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     config = config or {}
     num_samples = int(config.get("num_samples", 20000))
-    generate_pdf = bool(config.get("generate_pdf", False))
+    generate_figures = bool(config.get("generate_figures", True))
+    generate_pdf = bool(config.get("generate_pdf", False)) and generate_figures
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
     expected_priors = config.get("expected_priors")
@@ -459,20 +460,21 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                 }
             )
 
-        f0 = _fig_histograma_raw(dia_label, df_dia_raw, grupos_stats)
-        if f0 is not None:
-            figures.append(f0)
+        if generate_figures:
+            f0 = _fig_histograma_raw(dia_label, df_dia_raw, grupos_stats)
+            if f0 is not None:
+                figures.append(f0)
 
-        figures.append(_fig_posteriors_beta(dia_label, paso, grupos_stats))
+            figures.append(_fig_posteriors_beta(dia_label, paso, grupos_stats))
 
-        comparaciones = [
-            k for k in paso.keys()
-            if isinstance(k, str) and k.startswith("A_vs_")
-        ]
-        for clave in comparaciones:
-            stats = paso[clave]
-            control, variant = clave.split("_vs_")
-            figures.append(_fig_diff(dia_label, stats, control, variant))
+            comparaciones = [
+                k for k in paso.keys()
+                if isinstance(k, str) and k.startswith("A_vs_")
+            ]
+            for clave in comparaciones:
+                stats = paso[clave]
+                control, variant = clave.split("_vs_")
+                figures.append(_fig_diff(dia_label, stats, control, variant))
 
     summary_df = pd.DataFrame(summary_rows)
     comparisons = (

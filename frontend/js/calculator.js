@@ -45,6 +45,7 @@ function renderSidebar() {
     });
   });
 
+  toggleFigureOptions();
   toggleAiKeyInput();
 }
 
@@ -69,11 +70,17 @@ function renderExecutionOptions(enfoque) {
   return `
     <div class="checkbox-group">
       <label class="checkbox-item">
+        <input type="checkbox" id="chk-figures" checked onchange="toggleFigureOptions()"> Generar gr&aacute;ficos
+      </label>
+      <label class="checkbox-item">
         <input type="checkbox" id="chk-pdf"> Generar PDF
       </label>
       <label class="checkbox-item">
         <input type="checkbox" id="chk-ai" checked onchange="toggleAiKeyInput()"> Interpretaci&oacute;n IA (OpenAI)
       </label>
+    </div>
+    <div id="pdf-requires-figures" class="execution-option-note" style="display:none;">
+      El PDF requiere generar gr&aacute;ficos.
     </div>
     <div id="ai-key-row" class="ai-key-row">
       <label class="input-label">OpenAI API Key</label>
@@ -402,13 +409,27 @@ function toggleAiKeyInput() {
   }
 }
 
+function toggleFigureOptions() {
+  const chkFigures = document.getElementById('chk-figures');
+  const chkPdf = document.getElementById('chk-pdf');
+  const note = document.getElementById('pdf-requires-figures');
+  const enabled = !chkFigures || chkFigures.checked;
+  if (chkPdf) {
+    if (!enabled) chkPdf.checked = false;
+    chkPdf.disabled = !enabled;
+  }
+  if (note) note.style.display = enabled ? 'none' : 'block';
+}
+
 function buildAnalysisConfig() {
+  const generateFigures = document.getElementById('chk-figures') ? document.getElementById('chk-figures').checked : true;
   const generatePdf = document.getElementById('chk-pdf') ? document.getElementById('chk-pdf').checked : false;
   const includeAi = document.getElementById('chk-ai') ? document.getElementById('chk-ai').checked : false;
   const openaiApiKey = document.getElementById('input-ai-key') ? document.getElementById('input-ai-key').value.trim() : '';
 
   const config = {
-    generate_pdf: generatePdf,
+    generate_figures: generateFigures,
+    generate_pdf: generateFigures && generatePdf,
     include_ai: includeAi,
     openai_api_key: openaiApiKey,
     session_id: Boolean(window.State.session_id),

@@ -477,7 +477,8 @@ def _build_lightweight_comparisons(
 def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     config = config or {}
     num_samples = int(config.get("num_samples", 100000))
-    generate_pdf = bool(config.get("generate_pdf", False))
+    generate_figures = bool(config.get("generate_figures", True))
+    generate_pdf = bool(config.get("generate_pdf", False)) and generate_figures
     include_ai = bool(config.get("include_ai", False))
     openai_api_key = config.get("openai_api_key", "")
     layout = detect_aggregate_groups(df.columns)
@@ -506,7 +507,7 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         with PdfPages(buf) as pdf:
             figs = modelo_gamma.mostrar_resultados_con_graficos(pdf=pdf, show=False)
         pdf_bytes = buf.getvalue()
-    else:
+    elif generate_figures:
         figs = modelo_gamma.mostrar_resultados_con_graficos(pdf=None, show=False)
 
     summary = _build_summary_from_historial(modelo_gamma.historial)
