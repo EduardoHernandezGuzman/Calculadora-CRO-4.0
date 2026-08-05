@@ -17,7 +17,7 @@ El backend conecta ocho combinaciones de motor y unidad de análisis:
 
 Los contrastes frecuentistas permiten hipótesis de dos colas o de una cola, tanto derecha como izquierda.
 
-El selector de la interfaz muestra únicamente **Enfoque Bayesiano** y **Enfoque Frecuentista (p-value)**. Bootstrap y los motores bayesianos sin Session ID se conservan para compatibilidad interna y de API, pero no son seleccionables desde el frontend. En el flujo bayesiano, `session_id` se fija automáticamente a `true` y el asistente pasa directamente a la selección de conversiones únicas o múltiples.
+El selector de la interfaz muestra únicamente **Enfoque Bayesiano** y **Enfoque Frecuentista (p-value)**. Bootstrap se conserva para compatibilidad interna y de API, pero no es seleccionable desde el frontend. En Bayesiano, el asistente permite elegir con o sin Session ID antes de seleccionar conversiones únicas o múltiples. En Frecuentista, la pantalla de Session ID se omite, `session_id` se fija a `false` y se continúa directamente con el tipo de hipótesis.
 
 ## Requisitos
 
@@ -106,7 +106,7 @@ El formato depende de la unidad de análisis seleccionada. Los nombres de las co
 - B, C, D y E son opcionales; solo se incluyen las variantes disponibles.
 - Se admiten experimentos A/B, A/B/C, A/B/C/D y A/B/C/D/E.
 
-En la interfaz, el enfoque bayesiano permite cargar CSV o introducir datos manualmente y utiliza siempre Session ID. El enfoque frecuentista p-value muestra únicamente entrada manual y permite elegir si el análisis utiliza Session ID. La API conserva la aceptación de CSV para todos los motores.
+En la interfaz, el enfoque bayesiano permite cargar CSV o introducir datos manualmente, tanto con Session ID como sin él. El enfoque frecuentista p-value muestra únicamente entrada manual y utiliza el motor sin Session ID. La API conserva la aceptación de CSV y los motores con Session ID para compatibilidad.
 
 ### Datos agregados, sin Session ID
 
@@ -162,13 +162,17 @@ En conversiones únicas `[0,1]`, las conversiones no pueden superar las visitas 
 
 ## Interpretación de resultados
 
-La interfaz muestra una tarjeta por comparación A vs variante y destaca como máximo una:
+La interfaz muestra una tarjeta principal por comparación A vs variante y destaca como máximo una:
 
 - **Ganadora**: la comparación seleccionada cumple todos los criterios estadísticos vigentes del motor.
 - **Mejor candidata**: es la comparación favorable con mayor evidencia, pero todavía no cumple todos los criterios de ganadora.
 - **Sin ganador concluyente**: no existe una variante que cumpla los criterios necesarios.
 
 Una comparación puede ser individualmente concluyente sin recibir el destacado principal cuando otra variante tiene mayor evidencia.
+
+El control A también puede ser ganador. En el frecuentista bilateral, el signo de una diferencia significativa determina si gana A o la variante. En los motores bayesianos con Session ID, una probabilidad de superioridad de la variante igual o superior al 95 % declara ganadora a la variante; una probabilidad igual o inferior al 5 % declara ganador al control A.
+
+Los motores bayesianos con Session ID añaden `reverse_comparison` a cada A vs variante. La interfaz muestra junto a la tarjeta principal una tarjeta inversa B vs A, C vs A, etc., que contiene únicamente la probabilidad de que A supere a la variante y el ganador absoluto. Estas tarjetas son informativas: no participan en `is_best`, no duplican el resumen y no generan comparaciones entre variantes.
 
 ### Comparaciones múltiples
 
@@ -196,7 +200,7 @@ SRM todavía no se incluye en los prompts de IA ni en el PDF. Una futura versió
 - `examples/frecuentista_sin_session_abcde.csv`
 - `examples/frecuentista_con_session_abc.csv`
 
-Todos contienen datos sintéticos válidos para pruebas y llamadas directas a la API. La interfaz solo muestra carga de CSV en el flujo bayesiano con Session ID; los demás ejemplos sirven para validar los motores conservados en backend.
+Todos contienen datos sintéticos válidos para pruebas y llamadas directas a la API. La interfaz muestra carga de CSV en los flujos bayesianos con y sin Session ID; los ejemplos frecuentistas sirven también para validar los motores conservados en backend.
 
 ## Pruebas
 
@@ -253,7 +257,7 @@ Opciones principales de `config`:
 
 La respuesta puede incluir `summary`, `figures`, `pdf_bytes`, `log_text`, `comparisons` y `srm`.
 
-`comparisons` contiene un registro ligero y serializable por cada A vs variante, con tasas o medias, uplift, evidencia, intervalo, estado estadístico, `selection_label` e `is_best`. Como máximo un registro puede tener `is_best=true`.
+`comparisons` contiene un registro ligero y serializable por cada A vs variante, con tasas o medias, uplift, evidencia, intervalo, `comparison_winner`, estado estadístico, `selection_label` e `is_best`. Como máximo un registro puede tener `is_best=true`. En los motores bayesianos con Session ID, cada registro incluye además un bloque ligero `reverse_comparison`; nunca se añade como un elemento independiente de la colección.
 
 `srm` contiene el resultado global del reparto de muestra:
 
