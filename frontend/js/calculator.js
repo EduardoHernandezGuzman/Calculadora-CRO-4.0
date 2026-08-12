@@ -7,10 +7,11 @@ function renderSidebar() {
   const s = window.State;
   const engineKey = s.selected_engine_key;
   const enfoque = s.enfoque;
+  const isFrequentist = enfoque === 'frecuentista' || enfoque === 'freq_pvalue';
   const sidebar = document.getElementById('calculator-sidebar');
 
   const title = enfoque === 'bayesiano' ? 'Calculadora Bayesiana'
-    : enfoque === 'frecuentista' ? 'Calculadora Frecuentista'
+    : isFrequentist ? 'Calculadora Frecuentista'
     : 'Calculadora';
 
   let body = `
@@ -24,7 +25,7 @@ function renderSidebar() {
 
   if (enfoque === 'bayesiano') {
     body += renderBayesConfig();
-  } else if (enfoque === 'frecuentista') {
+  } else if (isFrequentist) {
     body += renderFreqConfig();
   }
 
@@ -126,56 +127,17 @@ function renderBayesConfig() {
 }
 
 function renderFreqConfig() {
-  const s = window.State;
-  const intervalMap = { centrado: 'Two-Tailed', derecha: 'One-Tailed', izquierda: 'One-Tailed' };
-  const intervalTxt = { centrado: 'IC Centrado', derecha: 'Cola derecha', izquierda: 'Cola izquierda' };
-  const tipo = intervalMap[s.freq_interval_type];
-  const dirTxt = s.freq_interval_type === 'derecha' ? 'Mejora (cola derecha)' : s.freq_interval_type === 'izquierda' ? 'Empeora (cola izquierda)' : '';
-
-  const sidTxt = s.session_id ? 'Con Session ID' : 'Sin Session ID';
-  const sidDesc = s.session_id
-    ? 'Analizar&aacute;s tu test A/B <b>con Session ID</b>.'
-    : 'Analizar&aacute;s tu test A/B <b>sin Session ID</b>.';
-
-  let dirHtml = '';
-  if (dirTxt) {
-    const dirDesc = s.freq_interval_type === 'derecha'
-      ? 'Se eval\u00faa si el valor de la m\u00e9trica en la variante es mayor que en el control, seg\u00fan el criterio definido para el experimento.'
-      : 'Se eval\u00faa si el valor de la m\u00e9trica en la variante es menor que en el control, seg\u00fan el criterio definido para el experimento.';
-    dirHtml = `
-      <div class="expander">
-        <div class="expander-header">Direcci&oacute;n de hip&oacute;tesis <span class="arrow">&#9660;</span></div>
-        <div class="expander-body">
-          <div class="dd-value">${dirTxt}</div>
-          ${dirDesc}
-        </div>
-      </div>
-    `;
-  }
-
   return `
     <div class="expander">
-      <div class="expander-header">Tipo de hip&oacute;tesis <span class="arrow">&#9660;</span></div>
+      <div class="expander-header">Nivel de significancia (95%) <span class="arrow">&#9660;</span></div>
       <div class="expander-body">
-        <div class="dd-value">${tipo}</div>
-        ${tipo === 'Two-Tailed'
-          ? 'Se analiza cualquier diferencia, tanto mejora como empeoramiento. Este enfoque eval\u00faa si existe un efecto estad\u00edsticamente significativo sin asumir de antemano el sentido del cambio.'
-          : 'Se analiza \u00fanicamente una diferencia en una direcci\u00f3n espec\u00edfica, ya sea mejorar o empeorar la m\u00e9trica objetivo. En caso de seleccionar One-Tailed, en el siguiente paso se indicar\u00e1 si el an\u00e1lisis debe detectar una mejora o un empeoramiento de la m\u00e9trica.'}
-      </div>
-    </div>
-    ${dirHtml}
-    <div class="expander">
-      <div class="expander-header">Nivel de confianza <span class="arrow">&#9660;</span></div>
-      <div class="expander-body">
-        <div class="dd-value">95% (Default)</div>
-        Es el umbral que determina si el resultado es estad&iacute;sticamente significativo. Con un nivel de confianza del <b>95%</b> (&alpha; = 0.05), rechazamos la hip&oacute;tesis nula cuando el p-value es inferior a 0.05.
+        Umbral estad&iacute;stico utilizado para determinar si las diferencias observadas entre las variantes son suficientemente fiables como para no atribuirlas al azar. Representa la probabilidad m&aacute;xima aceptada de obtener un falso positivo.
       </div>
     </div>
     <div class="expander">
-      <div class="expander-header">Unidad de an&aacute;lisis <span class="arrow">&#9660;</span></div>
+      <div class="expander-header">Poder estad&iacute;stico (80%) <span class="arrow">&#9660;</span></div>
       <div class="expander-body">
-        <div class="dd-value">${sidTxt}</div>
-        ${sidDesc}
+        Probabilidad de detectar una diferencia real entre las variantes cuando realmente existe. Un mayor poder reduce el riesgo de concluir err&oacute;neamente que no hay efecto (falso negativo).
       </div>
     </div>
   `;

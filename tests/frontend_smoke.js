@@ -494,6 +494,76 @@ const config = evaluate('buildAnalysisConfig()');
 if (config.generate_figures !== true) throw new Error('La generación de gráficos no está activa por defecto.');
 if (config.freq_interval_type !== 'izquierda') throw new Error('freq_interval_type no se transporta.');
 if (config.session_id !== true) throw new Error('session_id no se transporta.');
+if ('alpha' in config || 'significance_level' in config || 'statistical_power' in config || 'power' in config) {
+  throw new Error('Los desplegables informativos alteran el payload estadístico.');
+}
+
+const significanceCopy = 'Umbral estad&iacute;stico utilizado para determinar si las diferencias observadas entre las variantes son suficientemente fiables como para no atribuirlas al azar. Representa la probabilidad m&aacute;xima aceptada de obtener un falso positivo.';
+const powerCopy = 'Probabilidad de detectar una diferencia real entre las variantes cuando realmente existe. Un mayor poder reduce el riesgo de concluir err&oacute;neamente que no hay efecto (falso negativo).';
+const bayesSidebarConfig = evaluate('renderBayesConfig()');
+if (!bayesSidebarConfig.includes('Tipo de conversiones') || !bayesSidebarConfig.includes('Nivel de confianza') || !bayesSidebarConfig.includes('Unidad de an&aacute;lisis')) {
+  throw new Error('Los desplegables bayesianos existentes han desaparecido.');
+}
+if (bayesSidebarConfig.includes('Nivel de significancia (95%)') || bayesSidebarConfig.includes('Poder estad&iacute;stico (80%)')) {
+  throw new Error('Los desplegables frecuentistas aparecen en Bayesiano.');
+}
+
+for (const enfoque of ['frecuentista', 'freq_pvalue']) {
+  context.window.State.enfoque = enfoque;
+  context.window.State.session_id = false;
+  element('calculator-sidebar');
+  evaluate('renderSidebar()');
+  const sidebarHtml = elements['calculator-sidebar'].innerHTML;
+  if (!sidebarHtml.includes('Calculadora Frecuentista')) {
+    throw new Error(`El enfoque ${enfoque} no se reconoce como familia frecuentista en el sidebar.`);
+  }
+  if (!sidebarHtml.includes('Nivel de significancia (95%)') || !sidebarHtml.includes(significanceCopy)) {
+    throw new Error(`Falta el desplegable de significancia o su copy exacto en ${enfoque}.`);
+  }
+  if (!sidebarHtml.includes('Poder estad&iacute;stico (80%)') || !sidebarHtml.includes(powerCopy)) {
+    throw new Error(`Falta el desplegable de poder o su copy exacto en ${enfoque}.`);
+  }
+  if (!sidebarHtml.includes('<div class="expander-header">Nivel de significancia (95%) <span class="arrow">&#9660;</span></div>') ||
+      !sidebarHtml.includes('<div class="expander-header">Poder estad&iacute;stico (80%) <span class="arrow">&#9660;</span></div>')) {
+    throw new Error('Significancia o poder no aparecen como acordeones independientes.');
+  }
+  for (const hiddenHeader of ['Tipo de hip&oacute;tesis', 'Direcci&oacute;n de hip&oacute;tesis', 'Nivel de confianza', 'Unidad de an&aacute;lisis']) {
+    if (sidebarHtml.includes(`<div class="expander-header">${hiddenHeader}`)) {
+      throw new Error(`${hiddenHeader} sigue visible en el sidebar frecuentista.`);
+    }
+  }
+  if ((sidebarHtml.match(/class="expander"/g) || []).length !== 3) {
+    throw new Error('El sidebar completo debe contener Enfoque y los dos expanders frecuentistas.');
+  }
+  if (sidebarHtml.indexOf('Nivel de significancia (95%)') > sidebarHtml.indexOf('Poder estad&iacute;stico (80%)')) {
+    throw new Error('El orden de significancia y poder es incorrecto.');
+  }
+}
+
+const frequentistConfig = evaluate('renderFreqConfig()');
+const frequentistHeaders = [...frequentistConfig.matchAll(/class="expander-header">([^<]+)/g)].map(match => match[1].trim());
+if (frequentistHeaders.join('|') !== 'Nivel de significancia (95%)|Poder estad&iacute;stico (80%)') {
+  throw new Error(`La configuración frecuentista contiene headers inesperados: ${frequentistHeaders.join(', ')}`);
+}
+
+let expanderClick = null;
+const interactiveExpander = {
+  opened: false,
+  querySelector(selector) {
+    if (selector !== '.expander-header') return null;
+    return { addEventListener(event, callback) { if (event === 'click') expanderClick = callback; } };
+  },
+  classList: { toggle(name) { if (name === 'open') interactiveExpander.opened = !interactiveExpander.opened; } },
+};
+context.$$ = selector => selector === '.expander' ? [interactiveExpander] : [];
+context.window.State.enfoque = 'freq_pvalue';
+evaluate('renderSidebar()');
+if (typeof expanderClick !== 'function') throw new Error('El listener común no alcanza los nuevos expanders.');
+expanderClick();
+if (!interactiveExpander.opened) throw new Error('El desplegable frecuentista no se abre.');
+expanderClick();
+if (interactiveExpander.opened) throw new Error('El desplegable frecuentista no se cierra.');
+context.$$ = () => [];
 
 const executionOptions = evaluate("renderExecutionOptions('bayesiano')");
 if (!executionOptions.includes('id="chk-figures" checked') || !executionOptions.includes('Generar gr&aacute;ficos')) {
