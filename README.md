@@ -19,6 +19,8 @@ Los contrastes frecuentistas permiten hipótesis de dos colas o de una cola, tan
 
 El selector de la interfaz muestra únicamente **Enfoque Bayesiano** y **Enfoque Frecuentista (p-value)**. Bootstrap se conserva para compatibilidad interna y de API, pero no es seleccionable desde el frontend. En Bayesiano, el asistente permite elegir con o sin Session ID antes de seleccionar conversiones únicas o múltiples. En Frecuentista, la pantalla de Session ID se omite, `session_id` se fija a `false` y se continúa directamente con el tipo de hipótesis.
 
+En el menú lateral frecuentista se muestran únicamente dos desplegables informativos: **Nivel de significancia (95%)** y **Poder estadístico (80%)**. Estos valores son explicativos y no modifican los umbrales, el tamaño muestral ni la configuración enviada a los motores.
+
 ## Requisitos
 
 - Python 3 con soporte para entornos virtuales (`venv`).
@@ -95,7 +97,7 @@ Variables de entorno:
 
 No guardes el valor de `OPENAI_API_KEY` en el repositorio. Si no se configura, los análisis siguen funcionando con la interpretación de IA desactivada.
 
-El sistema de archivos de las instancias gratuitas de Render es efímero. Esta aplicación procesa CSV, gráficos y PDF en memoria y no necesita almacenamiento persistente. Las instancias gratuitas pueden suspenderse tras periodos de inactividad, por lo que la primera petición posterior puede tardar más en responder.
+El sistema de archivos de las instancias gratuitas de Render es efímero. Esta aplicación procesa CSV, gráficos y PDF en memoria y no necesita almacenamiento persistente. Las instancias gratuitas pueden suspenderse tras periodos de inactividad, por lo que la primera petición posterior puede tardar más en responder. Para reducir tiempo de CPU, memoria y tamaño de respuesta puede desactivarse **Generar gráficos**; esta opción también desactiva el PDF.
 
 ## Formatos de entrada
 
@@ -170,9 +172,15 @@ La interfaz muestra una tarjeta principal por comparación A vs variante y desta
 
 Una comparación puede ser individualmente concluyente sin recibir el destacado principal cuando otra variante tiene mayor evidencia.
 
-El control A también puede ser ganador. En el frecuentista bilateral, el signo de una diferencia significativa determina si gana A o la variante. En los motores bayesianos con Session ID, una probabilidad de superioridad de la variante igual o superior al 95 % declara ganadora a la variante; una probabilidad igual o inferior al 5 % declara ganador al control A.
+El control A también puede ser ganador. En el frecuentista bilateral, el signo de una diferencia significativa determina si gana A o la variante. En los cuatro motores bayesianos, una probabilidad de superioridad de la variante igual o superior al 95 % declara ganadora a la variante; una probabilidad igual o inferior al 5 % declara ganador al control A.
 
 Los cuatro motores bayesianos añaden `reverse_comparison` a cada A vs variante. La interfaz muestra junto a la tarjeta principal una tarjeta inversa B vs A, C vs A, etc., que contiene únicamente la probabilidad de que A supere a la variante y el ganador absoluto. Estas tarjetas son informativas: no participan en `is_best`, no duplican el resumen y no generan comparaciones entre variantes.
+
+### Gráficos y PDF
+
+La opción **Generar gráficos** está activada por defecto. Cuando está activa, los motores bayesianos procesan y conservan todo el historial, pero crean únicamente las figuras correspondientes al último estado acumulado. Por tanto, el número de gráficos depende de los grupos y comparaciones, no del número de días del CSV. Los motores frecuentistas ya generan figuras finales por comparación.
+
+Cuando se desactiva, no se crean figuras Matplotlib/Seaborn, `figures` se devuelve vacío o `null` y la pestaña Gráficos se oculta. El resumen histórico, SRM, comparaciones, ganador, intervalos, salida tipo consola e interpretación con IA no cambian. En esta versión el PDF requiere gráficos: desactivar los gráficos desmarca y deshabilita también la generación de PDF.
 
 ### Comparaciones múltiples
 
@@ -247,7 +255,8 @@ Opciones principales de `config`:
 
 | Opción | Descripción |
 |---|---|
-| `generate_pdf` | Genera el PDF cuando es `true` |
+| `generate_figures` | Genera únicamente los gráficos del resultado final. Por defecto es `true` |
+| `generate_pdf` | Genera el PDF cuando es `true`; requiere `generate_figures=true` |
 | `include_ai` | Solicita una única interpretación conjunta cuando es `true` |
 | `openai_api_key` | Clave opcional para la interpretación con IA |
 | `num_samples` | Número de muestras para motores bayesianos |
