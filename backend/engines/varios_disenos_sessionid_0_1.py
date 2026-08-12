@@ -460,21 +460,27 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
                 }
             )
 
-        if generate_figures:
-            f0 = _fig_histograma_raw(dia_label, df_dia_raw, grupos_stats)
-            if f0 is not None:
-                figures.append(f0)
+    if generate_figures and modelo.historial:
+        dia_val, df_dia_raw, _ = agregados[-1]
+        dia_label = f"Día {int(dia_val)}" if str(dia_val).isdigit() else f"Día {dia_val}"
+        paso = modelo.historial[-1]
+        grupos_stats = [
+            g for g in paso if isinstance(paso.get(g), dict) and "media" in paso[g]
+        ]
+        f0 = _fig_histograma_raw(dia_label, df_dia_raw, grupos_stats)
+        if f0 is not None:
+            figures.append(f0)
 
-            figures.append(_fig_posteriors_beta(dia_label, paso, grupos_stats))
+        figures.append(_fig_posteriors_beta(dia_label, paso, grupos_stats))
 
-            comparaciones = [
-                k for k in paso.keys()
-                if isinstance(k, str) and k.startswith("A_vs_")
-            ]
-            for clave in comparaciones:
-                stats = paso[clave]
-                control, variant = clave.split("_vs_")
-                figures.append(_fig_diff(dia_label, stats, control, variant))
+        comparaciones = [
+            k for k in paso.keys()
+            if isinstance(k, str) and k.startswith("A_vs_")
+        ]
+        for clave in comparaciones:
+            stats = paso[clave]
+            control, variant = clave.split("_vs_")
+            figures.append(_fig_diff(dia_label, stats, control, variant))
 
     summary_df = pd.DataFrame(summary_rows)
     comparisons = (

@@ -230,7 +230,7 @@ class ConversionBayesMultiGrupo:
     ) -> List[plt.Figure]:
         figs: List[plt.Figure] = []
 
-        for paso in self.historial:
+        for paso in self.historial[-1:]:
             dia = paso["dia"]
             try:
                 dia_num = int(str(dia).split()[1])

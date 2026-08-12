@@ -354,14 +354,17 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None):
                 }
             )
 
-        if generate_figures:
-            fig, ax = plt.subplots(figsize=(8, 4))
-            for grupo in grupos:
-                sns.kdeplot(paso[grupo]["muestras"], fill=True, label=f"Grupo {grupo}", ax=ax)
-            ax.set_title(f"{dia} - Posterior Gamma")
-            ax.legend()
-            figures.append(fig)
-            plt.close(fig)
+    if generate_figures and modelo.historial:
+        paso = modelo.historial[-1]
+        dia = paso["dia"]
+        grupos = [g for g in paso if isinstance(paso[g], dict) and "media" in paso[g]]
+        fig, ax = plt.subplots(figsize=(8, 4))
+        for grupo in grupos:
+            sns.kdeplot(paso[grupo]["muestras"], fill=True, label=f"Grupo {grupo}", ax=ax)
+        ax.set_title(f"{dia} - Posterior Gamma")
+        ax.legend()
+        figures.append(fig)
+        plt.close(fig)
 
     summary_df = pd.DataFrame(summary_rows)
     comparisons = (

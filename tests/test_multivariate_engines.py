@@ -108,6 +108,28 @@ def engine_frame(engine: str, groups: tuple[str, ...]) -> pd.DataFrame:
     return session_frame(groups) if engine in SESSION_ENGINES else aggregate_frame(groups)
 
 
+def multi_day_engine_frame(
+    engine: str, groups: tuple[str, ...], days: int
+) -> pd.DataFrame:
+    if engine not in SESSION_ENGINES:
+        rows = []
+        for day in range(1, days + 1):
+            row = {"Día": day}
+            for group in groups:
+                row[f"Visitas {group}"] = 100
+                row[f"Conversiones {group}"] = int(100 * GROUP_RATES[group])
+            rows.append(row)
+        return pd.DataFrame(rows)
+
+    frames = []
+    for day in range(1, days + 1):
+        frame = session_frame(groups, visits=20)
+        frame["Día"] = day
+        frame["SessionID"] = frame["SessionID"].map(lambda value: f"{day}-{value}")
+        frames.append(frame)
+    return pd.concat(frames, ignore_index=True)
+
+
 def engine_config(engine: str, **extra) -> dict:
     config = {"include_ai": False, "generate_pdf": False}
     if engine in BAYES_ENGINES:
@@ -515,6 +537,48 @@ class EngineContractTests(unittest.TestCase):
                 self.assertEqual(default_output.comparisons, disabled_output.comparisons)
                 self.assertIsNotNone(disabled_output.summary)
                 self.assertTrue(disabled_output.comparisons)
+
+    def test_figure_count_depends_on_groups_not_historical_days(self):
+        for engine in ALL_ENGINES:
+            for groups in (tuple("AB"), tuple("ABC"), tuple("ABCDE")):
+                figure_count = None
+                for days in (1, 5, 10, 21):
+                    with self.subTest(engine=engine, groups=groups, days=days):
+                        output = run_silently(
+                            engine,
+                            multi_day_engine_frame(engine, groups, days),
+                            generate_figures=True,
+                        )
+                        current_count = len(output.figures or [])
+                        self.assertGreater(current_count, 0)
+                        if figure_count is None:
+                            figure_count = current_count
+                        self.assertEqual(current_count, figure_count)
+                        if engine in BAYES_ENGINES:
+                            self.assertEqual(len(output.summary), days * len(groups))
+                            self.assertEqual(output.summary["dia"].nunique(), days)
+                        else:
+                            self.assertEqual(len(output.summary), len(groups) - 1)
+                        for figure in output.figures or []:
+                            plt.close(figure)
+
+    def test_pdf_uses_only_final_figures_for_multiday_bayesian_results(self):
+        for engine in BAYES_ENGINES:
+            counts = []
+            for days in (1, 21):
+                with self.subTest(engine=engine, days=days):
+                    output = run_silently(
+                        engine,
+                        multi_day_engine_frame(engine, tuple("AB"), days),
+                        generate_figures=True,
+                        generate_pdf=True,
+                    )
+                    self.assertIsInstance(output.pdf_bytes, bytes)
+                    self.assertTrue((output.pdf_bytes or b"").startswith(b"%PDF"))
+                    counts.append(len(output.figures or []))
+                    for figure in output.figures or []:
+                        plt.close(figure)
+            self.assertEqual(counts[0], counts[1])
 
 
     def test_ai_prompt_contains_every_control_comparison(self):
