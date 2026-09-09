@@ -351,6 +351,35 @@ if (!cards.includes('Límite inferior (IC 95 %)') || !cards.includes('Límite su
 if (cards.includes('[-2.00%, 32.00%]')) throw new Error('La tarjeta mantiene el formato conjunto del intervalo centrado.');
 if (/\b(null|NaN|undefined)\b/.test(cards)) throw new Error('Se muestran valores técnicos vacíos.');
 if (!cards.includes('Resultado concluyente')) throw new Error('Falta el estado concluyente no seleccionado.');
+context.rateComparisons = [
+  comparison('B', { variantValue: 0.1 }),
+  comparison('C', { variantValue: 0.0502 }),
+  comparison('D', { variantValue: 0.02345 }),
+  comparison('E', { variantValue: 0.04 }),
+];
+context.rateComparisons.forEach(item => { item.control_value = 0.0502; });
+const originalRateValues = context.rateComparisons.map(item => [item.control_value, item.variant_value]);
+const rateCards = evaluate('renderComparisonCards(rateComparisons, [])');
+const rateConsole = evaluate("renderConsoleTab({ comparisons: rateComparisons, summary: [] })");
+if (rateCards.includes('tasa/media') || rateConsole.includes('tasa/media')) {
+  throw new Error('Permanece el copy anterior Tasa/media en los resultados.');
+}
+if (!rateCards.includes('Control A · Tasa de conversión') ||
+    !rateCards.includes('Variante B · Tasa de conversión') ||
+    !rateCards.includes('Variante E · Tasa de conversión')) {
+  throw new Error('El nuevo copy de tasa no se aplica al control y a todas las variantes.');
+}
+if (!rateCards.includes('5.02%') || !rateCards.includes('10.00%') || !rateCards.includes('2.35%')) {
+  throw new Error('Las tasas no se muestran como porcentajes con dos decimales.');
+}
+if (!rateConsole.includes('Tasa de conversión: 5.02%')) {
+  throw new Error('La salida tipo consola no utiliza la nueva presentación de tasas.');
+}
+context.rateComparisons.forEach((item, index) => {
+  if (item.control_value !== originalRateValues[index][0] || item.variant_value !== originalRateValues[index][1]) {
+    throw new Error('El formateo visual ha modificado los valores internos de las tasas.');
+  }
+});
 for (const [variants, expectedCards] of [[['B'], 2], [['B', 'C'], 4], [['B', 'C', 'D', 'E'], 8]]) {
   context.bayesianMirrorComparisons = variants.map((variant, index) => bayesianComparison(variant, {
     isBest: index === 0,

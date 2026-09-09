@@ -674,7 +674,13 @@ function formatPercentValue(value, decimals = 2) {
 }
 
 function formatRateOrMean(value) {
-  return formatNumber(value, 4);
+  const number = finiteNumber(value);
+  if (number === null) return '—';
+  const percentage = number * 100;
+  const rounded = Math.round(
+    (percentage + Number.EPSILON * Math.max(1, Math.abs(percentage))) * 100
+  ) / 100;
+  return formatPercentValue(rounded, 2);
 }
 
 function formatInterval(interval) {
@@ -858,8 +864,8 @@ function renderComparisonCards(comparisons, summary) {
           <span class="comparison-badge">${escapeHtml(badge || 'Sin ganador concluyente')}</span>
         </div>
         <div class="comparison-core">
-          <div><span>Control A · tasa/media</span><strong>${formatRateOrMean(comparison.control_value)}</strong></div>
-          <div><span>Variante ${escapeHtml(comparison.variant)} · tasa/media</span><strong>${formatRateOrMean(comparison.variant_value)}</strong></div>
+          <div><span>Control A · Tasa de conversión</span><strong>${formatRateOrMean(comparison.control_value)}</strong></div>
+          <div><span>Variante ${escapeHtml(comparison.variant)} · Tasa de conversión</span><strong>${formatRateOrMean(comparison.variant_value)}</strong></div>
           <div><span>Uplift</span><strong>${formatPercentValue(comparison.uplift_pct)}</strong></div>
           <div><span>${renderEvidenceLabel(comparison, index)}</span><strong>${evidenceValue(comparison)}</strong></div>
         </div>
@@ -905,8 +911,8 @@ function renderConsoleTab(out) {
       '==================================================',
       `                 ANÁLISIS ${comparison.variant} vs A`,
       '==================================================',
-      `Control A · tasa/media: ${formatRateOrMean(comparison.control_value)}`,
-      `Variante ${comparison.variant} · tasa/media: ${formatRateOrMean(comparison.variant_value)}`,
+      `Control A · Tasa de conversión: ${formatRateOrMean(comparison.control_value)}`,
+      `Variante ${comparison.variant} · Tasa de conversión: ${formatRateOrMean(comparison.variant_value)}`,
     ];
     const nA = row.n_visitas_A ?? row.n_A;
     const nVariant = row.n_visitas_B ?? row.n_B;
