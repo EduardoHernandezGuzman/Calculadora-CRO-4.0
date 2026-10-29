@@ -37,7 +37,39 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def _interpretar_con_ia(resultados_ultimo_dia: Dict[str, Any], api_key: Optional[str] = None) -> str:
+def _datos_temporales_ia(historial, comparisons=None) -> str:
+    """Project existing cumulative evidence without changing or resampling history."""
+    historial = historial or []
+    keys = dict.fromkeys(k for paso in historial for k in paso if str(k).startswith("A_vs_"))
+    lines = ["Las probabilidades son evidencia acumulada hasta cada periodo, no probabilidades independientes de cada día.",
+             "Con pocos periodos evita afirmaciones categóricas sobre estabilidad y explica la limitación.",
+             "No inventes ni interpoles valores ausentes."]
+    for key in keys:
+        variant = key.split("_vs_", 1)[1]
+        lines.append(f"Comparativa A vs {variant} · P({variant} > A):")
+        count = 0
+        for paso in historial:
+            probability = paso.get(key, {}).get("prob_mejor")
+            if probability is None or not np.isfinite(probability):
+                continue
+            lines.append(f"{paso.get('dia', 'Periodo sin etiqueta')}: {float(probability) * 100:.10g}%")
+            count += 1
+        if count < 2:
+            lines.append("No existe información temporal suficiente para analizar una tendencia.")
+    if not keys:
+        lines.append("No existe información temporal suficiente para analizar una tendencia.")
+    lines.append("RESULTADO ESTADÍSTICO CALCULADO POR EL MOTOR (no recalcular ni reescribir):")
+    for item in comparisons or []:
+        lines.append(f"A vs {item['variant']}: ganador={item.get('comparison_winner') or 'ninguno'}; "
+                     f"estado={item.get('comparison_status')}; is_best={item.get('is_best')}; "
+                     f"selección={item.get('selection_label') or 'ninguna'}")
+    lines.append("Distingue el resultado estadístico calculado de la recomendación de negocio generada por la IA. "
+                 "Si difieren por prudencia, explica la diferencia sin alterar el resultado del motor.")
+    return "\n".join(lines)
+
+
+def _interpretar_con_ia(resultados_ultimo_dia: Dict[str, Any], api_key: Optional[str] = None,
+                       historial=None, comparisons=None) -> str:
     if not api_key:
         try:
             api_key = st.secrets["OPENAI_API_KEY"]
@@ -71,21 +103,33 @@ def _interpretar_con_ia(resultados_ultimo_dia: Dict[str, Any], api_key: Optional
             variant = str(k).split("_vs_", 1)[1]
             comparativas.append(
                 f"COMPARATIVA {k}:\n"
-                f"- Probabilidad de que {variant} supere al control A: {v['prob_mejor']*100:.2f}%\n"
+                f"Probabilidad de que {variant} supere a A: {v['prob_mejor']*100:.2f}%\n"
+                f"Dirección de esta probabilidad: {variant} > A (variante frente al control).\n"
                 f"- Uplift Medio Estimado: {v['uplift_media']*100:.2f}%\n"
                 f"- IC CENTRADO 95%: [{v['ci_centered'][0]*100:.2f}%, {v['ci_centered'][1]*100:.2f}%]\n"
                 f"- IC SUELO: > {v['ci_right'][0]*100:.2f}%\n"
                 f"- IC TECHO: < {v['ci_left'][1]*100:.2f}%"
             )
 
+    serie_temporal_probabilidad = _datos_temporales_ia(historial, comparisons)
     prompt = f"""
 Eres un experto Senior en Estadística Bayesiana y Experimentación (A/B Testing). Tu trabajo es interpretar los resultados y dar una recomendación de negocio.
 
 Instrucciones:
-- Contempla objetivo de MAXIMIZAR o MINIMIZAR la métrica (da ambas interpretaciones).
-- Regla del cero: si el intervalo de uplift incluye 0% => no hay diferencia concluyente.
-- Gestión de riesgo: traduce el peor caso (suelo/techo) a lenguaje de negocio.
-- Recomendación: detener el test o continuar.
+Contempla objetivo de MAXIMIZAR o MINIMIZAR la métrica (da ambas interpretaciones).
+Regla del cero: si el intervalo de uplift incluye 0% => no hay diferencia concluyente.
+Gestión de riesgo: traduce el peor caso (suelo/techo) a lenguaje de negocio.
+Probabilidad: utiliza la probabilidad de superioridad como indicador de confianza, pero no como único criterio de decisión.
+Tendencia temporal: analiza la evolución de la probabilidad de superioridad a lo largo del tiempo, utilizando los resultados diarios/semanales disponibles.
+Si la probabilidad muestra una tendencia positiva, creciente y relativamente estable, considera que la evidencia a favor de la variante se está consolidando. Esto refuerza, pero no sustituye, la evidencia proporcionada por la probabilidad actual, el uplift y el intervalo de credibilidad.
+Si la probabilidad es alta pero presenta una tendencia inestable o fluctuante (subidas y bajadas relevantes entre periodos), indícalo explícitamente. En este caso, no interpretes una probabilidad superior al 95% como evidencia suficiente por sí sola para declarar un ganador claro y recomienda cautela antes de tomar una decisión.
+Si la probabilidad muestra una tendencia decreciente, aunque el valor actual siga siendo elevado, indica que la evidencia a favor de la variante está perdiendo fuerza y que conviene continuar recolectando datos antes de tomar una decisión, salvo que el resto de evidencias sea claramente concluyente.
+Diferencia entre una probabilidad alta y una probabilidad alta y estable. La segunda proporciona mayor consistencia de la evidencia.
+No consideres una tendencia positiva únicamente porque el último valor sea superior al primero. Evalúa la dirección general y la estabilidad de la evolución.
+Recomendación: detener el test o continuar, justificando la decisión combinando probabilidad actual + tendencia temporal + uplift + intervalo de credibilidad + riesgo de negocio.
+No declares automáticamente una variante como ganadora únicamente porque la probabilidad de superioridad supere el 95%.
+Si la evidencia es contradictoria entre métricas, probabilidad, tendencia e intervalos, prioriza una recomendación prudente y explica brevemente la inconsistencia.
+Lenguaje claro, ejecutivo y sin fórmulas.
 
 DATOS DEL ÚLTIMO DÍA:
 {chr(10).join(resumen_grupos)}
@@ -93,7 +137,23 @@ DATOS DEL ÚLTIMO DÍA:
 COMPARATIVAS:
 {chr(10).join(comparativas)}
 
-Lenguaje claro, ejecutivo y sin fórmulas.
+EVOLUCIÓN TEMPORAL DE LA PROBABILIDAD:
+Para cada comparativa se proporciona la evolución temporal de la probabilidad de superioridad:
+{serie_temporal_probabilidad}
+
+Analiza esta evolución y clasifica la tendencia como una de las siguientes:
+Positiva y estable: la probabilidad aumenta de forma sostenida, con pocas fluctuaciones.
+Positiva pero inestable: la probabilidad presenta una dirección general ascendente, pero con fluctuaciones relevantes.
+Estable: la probabilidad se mantiene en niveles similares sin una dirección clara.
+Negativa: la probabilidad presenta una dirección general descendente.
+Muy volátil/inconclusa: existen fluctuaciones importantes sin una dirección clara.
+Incluye la tendencia temporal en la interpretación final. Una probabilidad superior al 95% acompañada de una tendencia inestable o decreciente debe interpretarse con cautela y no debe considerarse automáticamente un resultado concluyente.
+La recomendación final debe responder:
+¿Qué variante presenta actualmente mayor evidencia a su favor?
+¿La evidencia está consolidándose o es inestable?
+¿El resultado es suficientemente consistente como para detener el test?
+Si no lo es, ¿por qué conviene continuar recolectando datos?
+Da una recomendación final clara: DETENER EL TEST / CONTINUAR EL TEST, explicando brevemente los motivos.
 """.strip()
 
     try:
@@ -501,7 +561,8 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     if include_ai:
         if modelo.historial:
             log_parts.append("🤖 Interpretación IA (último día):")
-            log_parts.append(_interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key))
+            log_parts.append(_interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key,
+                                               historial=modelo.historial, comparisons=comparisons))
         else:
             log_parts.append("[IA] No hay historial para interpretar.")
 

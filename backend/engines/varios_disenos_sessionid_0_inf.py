@@ -27,7 +27,9 @@ warnings.filterwarnings("ignore", "Glyph .* missing from font")
 sns.set(style="whitegrid")
 
 
-def interpretar_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None) -> str:
+def interpretar_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None,
+                       historial=None, comparisons=None) -> str:
+    from backend.engines.varios_disenos_sessionid_0_1 import _datos_temporales_ia
     if not api_key:
         try:
             api_key = st.secrets["OPENAI_API_KEY"]
@@ -63,7 +65,8 @@ def interpretar_con_ia(resultados: Dict[str, Any], api_key: Optional[str] = None
             variant = str(k).split("_vs_", 1)[1]
             comparativas.append(
                 f"COMPARATIVA {k}:\n"
-                f"Probabilidad de que {variant} supere al control A: {v['prob_mejor']*100:.2f}%\n"
+                f"Probabilidad de que {variant} supere a A: {v['prob_mejor']*100:.2f}%\n"
+                f"Dirección de esta probabilidad: {variant} > A (variante frente al control).\n"
                 f"Uplift Medio Estimado: {v['uplift_media']*100:.2f}%\n"
                 f"IC Centrado 95%: [{v['ci_centered'][0]*100:.2f}%, {v['ci_centered'][1]*100:.2f}%]\n"
                 f"IC Unilateral (Suelo): > {v['ci_right'][0]*100:.2f}%\n"
@@ -81,13 +84,54 @@ Gestión de riesgo: traduce los intervalos (suelo/techo) a impacto real en negoc
 
 Probabilidad: utiliza la probabilidad de superioridad como indicador de confianza, pero no como único criterio de decisión.
 
+Análisis de tendencia temporal: analiza la evolución de la probabilidad de superioridad a lo largo del tiempo.
+Si la probabilidad presenta una tendencia positiva, creciente y estable, considera que la evidencia a favor de la variante se está consolidando.
+Si la probabilidad presenta una tendencia positiva pero inestable, indica que, aunque la evidencia general pueda estar aumentando, existen fluctuaciones relevantes y la decisión debe tomarse con cautela.
+Si la probabilidad presenta una tendencia estable, indica que la evidencia se mantiene consistente, pero no necesariamente está aumentando.
+Si la probabilidad presenta una tendencia negativa, indica que la evidencia a favor de la variante está perdiendo fuerza, incluso aunque la probabilidad actual siga siendo elevada.
+Si existe una alta volatilidad, sin una dirección clara, indica que el resultado todavía no es suficientemente estable para considerarlo un ganador claro.
+No consideres una tendencia positiva únicamente porque el último valor sea superior al primero. Evalúa la dirección general y la estabilidad de la serie temporal.
+Regla específica para probabilidades >95%: una probabilidad de superioridad superior al 95% constituye una evidencia fuerte a favor de una variante, pero no debe interpretarse de forma aislada. Si la tendencia temporal de dicha probabilidad es inestable o decreciente, advierte explícitamente al usuario de que existe volatilidad en la evidencia y recomienda cautela antes de detener el test.
+
 Recomendación final: indica claramente si se debe detener el test (y elegir variante) o continuar recolectando datos.
+
+La decisión debe considerar conjuntamente:
+Probabilidad actual de superioridad.
+Tendencia temporal y estabilidad de dicha probabilidad.
+Uplift estimado.
+Intervalo de credibilidad.
+Peor y mejor escenario plausible.
+Objetivo de negocio: maximizar o minimizar.
+Riesgo asociado a tomar la decisión.
+No declares automáticamente un ganador únicamente porque la probabilidad supere el 95%. Si la probabilidad es >95% pero la tendencia es inestable, explica que la evidencia actual es favorable, pero su evolución no es suficientemente consistente como para asumir un ganador claro sin cautela.
 
 Lenguaje claro, ejecutivo y sin fórmulas matemáticas.
 
+DATOS DEL ÚLTIMO DÍA:
 {chr(10).join(resumen_grupos)}
 
 {chr(10).join(comparativas)}
+
+EVOLUCIÓN TEMPORAL DE LA PROBABILIDAD:
+Para cada comparativa se proporciona la serie temporal de probabilidad de superioridad:
+{_datos_temporales_ia(historial, comparisons)}
+Clasifica la evolución como:
+Positiva y estable
+Positiva pero inestable
+Estable
+Negativa
+Muy volátil/inconclusa
+Explica brevemente qué implica esta tendencia para la confianza en el resultado.
+RECOMENDACIÓN FINAL:
+Proporciona una recomendación ejecutiva indicando:
+Variante con mayor evidencia a favor.
+Probabilidad actual.
+Dirección y estabilidad de la tendencia.
+Magnitud del uplift.
+Rango plausible del resultado.
+Nivel de riesgo.
+Decisión: DETENER EL TEST / CONTINUAR EL TEST.
+Si la probabilidad supera el 95% pero la tendencia es inestable, no presentes el resultado como un ganador claro. Indica que la probabilidad actual es favorable, pero que la evolución temporal de la evidencia requiere cautela.
 """.strip()
 
     try:
@@ -382,7 +426,8 @@ def run(df: pd.DataFrame, config: Optional[Dict[str, Any]] = None):
         pdf_bytes = buffer.read()
 
     if include_ai and modelo.historial:
-        log_text = interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key)
+        log_text = interpretar_con_ia(modelo.historial[-1], api_key=openai_api_key,
+                                     historial=modelo.historial, comparisons=comparisons)
 
     return {
         "summary": summary_df,
